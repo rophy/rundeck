@@ -264,7 +264,7 @@ var RemoteOptionControl = Class.create({
         });
     },
     setFieldMultiId: function(name,id){
-
+        this.ids[name]=id;
         if (this.observing) {
             var found= $(id).select("input[type='checkbox']");
             if(found){
@@ -384,7 +384,8 @@ var RemoteOptionControl = Class.create({
             if(params['optionDeps']){
                 this.addOptionDeps(opt,params['optionDeps']);
             }
-            if(params['optionAutoReload']){
+            // optionAutoReload won't work for multi-selection.
+            if(params['optionAutoReload'] && !params['fieldMultiId']){
                 this.setOptionAutoReload(opt,params['optionAutoReload']);
             }
             if(params['hasUrl']){
@@ -392,7 +393,7 @@ var RemoteOptionControl = Class.create({
                 if(params['loadonstart']){
                     this.loadonstart[opt]=true;
                 }
-                if(params['optionAutoReload']){
+                if(params['optionAutoReload'] && !params['fieldMultiId']){
                     this.setOptionAutoReload(opt, true);
                 }
                 if(params['fieldMultiId']){
