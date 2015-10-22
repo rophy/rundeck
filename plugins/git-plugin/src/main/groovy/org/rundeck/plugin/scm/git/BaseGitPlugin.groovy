@@ -1,23 +1,35 @@
 package org.rundeck.plugin.scm.git
 
 import com.dtolabs.rundeck.core.jobs.JobReference
+import com.dtolabs.rundeck.core.plugins.configuration.Validator
+import com.dtolabs.rundeck.core.plugins.views.Action
 import com.dtolabs.rundeck.core.storage.ResourceMeta
 import com.dtolabs.rundeck.plugins.scm.*
 import org.apache.log4j.Logger
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.api.PullResult
+import org.eclipse.jgit.api.RebaseCommand
+import org.eclipse.jgit.api.RebaseResult
 import org.eclipse.jgit.api.Status
 import org.eclipse.jgit.api.TransportCommand
 import org.eclipse.jgit.diff.RawTextComparator
-import org.eclipse.jgit.lib.*
+import org.eclipse.jgit.lib.BranchConfig
+import org.eclipse.jgit.lib.ConfigConstants
+import org.eclipse.jgit.lib.Constants
+import org.eclipse.jgit.lib.ObjectId
+import org.eclipse.jgit.lib.Repository
 import org.eclipse.jgit.merge.MergeStrategy
 import org.eclipse.jgit.revwalk.RevCommit
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder
+import org.eclipse.jgit.transport.TrackingRefUpdate
 import org.eclipse.jgit.transport.URIish
 import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 import org.eclipse.jgit.util.FileUtils
+import org.rundeck.plugin.scm.git.config.Common
 import org.rundeck.storage.api.StorageException
 
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 
@@ -25,36 +37,47 @@ import java.util.regex.Pattern
  * Common features of the import and export plugins
  */
 class BaseGitPlugin {
-    public static final String GIT_PASSWORD_PATH = "gitPasswordPath"
-    public static final String SSH_PRIVATE_KEY_PATH = "sshPrivateKeyPath"
     public static final String REMOTE_NAME = "origin"
     Git git
     Repository repo
     File workingDir
     String branch
     Map<String, String> input
-    String project
+    Common commonConfig
     JobFileMapper mapper
     RawTextComparator COMP = RawTextComparator.DEFAULT
     Map<String, Map> jobStateMap = Collections.synchronizedMap([:])
 
-    BaseGitPlugin(final Map<String, String> input, final String project) {
-        this.input = input
-        this.project = project
+    BaseGitPlugin(Common commonConfig) {
+        this.input = commonConfig.rawInput
+        this.commonConfig=commonConfig
     }
 
-    def serialize(final JobExportReference job, format) {
-        File outfile = mapper.fileForJob(job)
-        if (!outfile.parentFile.exists()) {
+    Map<String, String> getSshConfig() {
+        def config = [:]
+
+        if (commonConfig.strictHostKeyChecking in ['yes', 'no']) {
+            config['StrictHostKeyChecking'] = commonConfig.strictHostKeyChecking
+        }
+        config
+    }
+
+    def serialize(final JobExportReference job, format, File outfile = null) {
+        if(!outfile){
+            outfile = mapper.fileForJob(job)
+        }
+        if (!outfile.parentFile.isDirectory()) {
             if (!outfile.parentFile.mkdirs()) {
                 throw new ScmPluginException(
                         "Cannot create necessary dirs to serialize file to path: ${outfile.absolutePath}"
                 )
             }
         }
-        outfile.withOutputStream { out ->
+        File temp = new File(outfile.getAbsolutePath() + ".tmp")
+        temp.withOutputStream { out ->
             job.jobSerializer.serialize(format, out)
         }
+        Files.move(temp.toPath(), outfile.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
 
     def serializeTemp(final JobExportReference job, format) {
@@ -70,11 +93,11 @@ class BaseGitPlugin {
         jobExportReferences.each { serialize(it, format) }
     }
 
-    def fetchFromRemote(ScmOperationContext context, Git git1 = null) {
+    TrackingRefUpdate fetchFromRemote(ScmOperationContext context, Git git1 = null) {
         def agit = git1 ?: git
         def fetchCommand = agit.fetch()
         fetchCommand.setRemote(REMOTE_NAME)
-        setupTransportAuthentication(input["url"], context, fetchCommand)
+        setupTransportAuthentication(sshConfig, context, fetchCommand)
         def fetchResult = fetchCommand.call()
 
         def update = fetchResult.getTrackingRefUpdate("refs/remotes/${REMOTE_NAME}/${this.branch}")
@@ -119,7 +142,7 @@ class BaseGitPlugin {
 
     PullResult gitPull(ScmOperationContext context, Git git1 = null) {
         def pullCommand = (git1 ?: git).pull().setRemote(REMOTE_NAME).setRemoteBranchName(branch)
-        setupTransportAuthentication(input.url, context, pullCommand)
+        setupTransportAuthentication(sshConfig, context, pullCommand)
         pullCommand.call()
     }
 
@@ -132,12 +155,50 @@ class BaseGitPlugin {
         if (rebase) {
             def pullCommand = git.pull().setRemote(REMOTE_NAME).setRemoteBranchName(branch)
             pullCommand.setRebase(true)
-            setupTransportAuthentication(this.input.url, context, pullCommand)
+            setupTransportAuthentication(sshConfig, context, pullCommand)
             def pullResult = pullCommand.call()
 
             def result = new ScmExportResultImpl()
             result.success = pullResult.successful
-            result.message = pullResult.toString()
+            result.message = result.success?"Rebase was successful":"Rebase did not succeed"
+            if(pullResult.rebaseResult){
+                result.extendedMessage = "Rebase result was: "+pullResult.rebaseResult.status?.toString()
+                //get status
+                boolean rebasestat=false
+                if(pullResult.rebaseResult.conflicts) {
+                    rebasestat = true
+
+                    result.extendedMessage = result.extendedMessage + " Conflicts: " + pullResult.rebaseResult.conflicts
+                }
+                if(pullResult.rebaseResult.failingPaths){
+                    rebasestat = true
+                    result.extendedMessage = result.extendedMessage+" Failures: "+pullResult.rebaseResult.failingPaths
+                }
+                if(pullResult.rebaseResult.uncommittedChanges){
+                    rebasestat = true
+                    result.extendedMessage = result.extendedMessage+" Uncommitted changes: "+pullResult.rebaseResult.uncommittedChanges
+                }
+                if(!rebasestat) {
+                    //rebase does not seem to actually include conflict info in result
+                    def status = git.status().call()
+                    if (status.conflicting || status.conflictingStageState) {
+                        result.extendedMessage = result.extendedMessage + " Conflicts: " + status.conflictingStageState
+                    }
+                }
+            }
+            if(!result.success) {
+                //abort rebase
+                def abortResult = git.rebase().setOperation(RebaseCommand.Operation.ABORT).call()
+                if (abortResult.status == RebaseResult.Status.ABORTED) {
+                    result.message = result.message + ". Rebase automatically aborted."
+                    result.extendedMessage = result.extendedMessage +
+                            ". Note: local rebase was automatically aborted and restored to previous state."
+                } else {
+                    result.message = result.message + ". Rebase WAS NOT automatically aborted ${abortResult.status}."
+                    result.extendedMessage = result.extendedMessage +
+                            ". Warning: local rebase WAS NOT automatically aborted."
+                }
+            }
             return result
         } else {
             //fetch, then
@@ -154,7 +215,8 @@ class BaseGitPlugin {
 
             def result = new ScmExportResultImpl()
             result.success = mergeresult.mergeStatus.successful
-            result.message = mergeresult.toString()
+            result.message = result.success?"Merge was successful":"Merge failed"
+            result.extendedMessage = mergeresult.toString()
             return result
 
         }
@@ -247,11 +309,12 @@ class BaseGitPlugin {
         }
     }
 
-    JobState createJobStatus(final Map map) {
+    JobState createJobStatus(final Map map,final List<Action> actions=[]) {
         //TODO: include scm status
         return new JobGitState(
                 synchState: map['synch'],
-                commit: map.commitMeta ? new GitScmCommit(map.commitMeta) : null
+                commit: map.commitMeta ? new GitScmCommit(map.commitMeta) : null,
+                actions:actions
         )
     }
 
@@ -321,7 +384,16 @@ class BaseGitPlugin {
             //test url matches origin
             def config = agit.getRepository().getConfig()
             def found = config.getString("remote", REMOTE_NAME, "url")
-
+            def projectName = config.getString("rundeck", "scm-plugin", "project-name")
+            if(projectName && !projectName.equals(context.frameworkProject)){
+                throw new ScmPluginInvalidInput(
+                        "The base directory is already in use by another project: ${projectName}",
+                        Validator.errorReport('dir', "The base directory is already in use by another project: ${projectName}")
+                )
+            }else if(!projectName) {
+                config.setString("rundeck", "scm-plugin", "project-name", context.frameworkProject)
+                config.save()
+            }
             if (found != url) {
 
                 logger.debug("url differs, re-cloning")
@@ -333,21 +405,27 @@ class BaseGitPlugin {
                     fetchFromRemote(context, agit)
                 } catch (Exception e) {
                     logger.debug("Failed fetch from the repository: ${e.message}", e)
-                    def msg = e.message
-                    def cause = e.cause
-                    while (cause) {
-                        msg += ": " + cause.message
-                        cause = cause.cause
-                    }
+                    String msg = collectCauseMessages(e)
                     throw new ScmPluginException("Failed fetch from the repository: ${msg}", e)
                 }
                 git = agit
                 repo = arepo
             }
-
         } else {
             performClone(base, url, context)
         }
+    }
+
+    private static String collectCauseMessages(Exception e) {
+        List<String> msgs = [e.message]
+        def cause = e.cause
+        while (cause) {
+            if (cause.message != msgs.last() && !msgs.last().endsWith(cause.message)) {
+                msgs << cause.message
+            }
+            cause = cause.cause
+        }
+        return msgs.join("; ")
     }
 
     private void performClone(File base, String url, ScmOperationContext context) {
@@ -357,7 +435,7 @@ class BaseGitPlugin {
                 setRemote(REMOTE_NAME).
                 setDirectory(base).
                 setURI(url)
-        setupTransportAuthentication(url, context, cloneCommand)
+        setupTransportAuthentication(sshConfig, context, cloneCommand, url)
         try {
             git = cloneCommand.call()
         } catch (Exception e) {
@@ -375,26 +453,34 @@ class BaseGitPlugin {
      * @param command
      */
     void setupTransportAuthentication(
-            String url,
+            Map<String, String> sshConfig,
             ScmOperationContext context,
-            TransportCommand command
+            TransportCommand command,
+            String url = null
     )
             throws ScmPluginException
     {
+        if (!url) {
+            url = command.repository.config.getString('remote', REMOTE_NAME, 'url')
+        }
+        if(!url){
+            throw new NullPointerException("url for remote was not set")
+        }
 
         URIish u = new URIish(url);
         logger.debug("transport url ${u}, scheme ${u.scheme}, user ${u.user}")
-        if ((u.scheme == null || u.scheme == 'ssh') && u.user && input[SSH_PRIVATE_KEY_PATH]) {
-            logger.debug("using ssh private key path ${input[SSH_PRIVATE_KEY_PATH]}")
+        if ((u.scheme == null || u.scheme == 'ssh') && u.user && commonConfig.sshPrivateKeyPath) {
+            logger.debug("using ssh private key path ${commonConfig.sshPrivateKeyPath}")
             //setup ssh key authentication
-            def expandedPath = expandContextVarsInPath(context, input[SSH_PRIVATE_KEY_PATH])
+            def expandedPath = expandContextVarsInPath(context, commonConfig.sshPrivateKeyPath)
             def keyData = loadStoragePathData(context, expandedPath)
             def factory = new PluginSshSessionFactory(keyData)
+            factory.sshConfig = sshConfig
             command.setTransportConfigCallback(factory)
-        } else if (u.user && input[GIT_PASSWORD_PATH]) {
+        } else if (u.user && commonConfig.gitPasswordPath) {
             //setup password authentication
-            logger.debug("using password path ${input[GIT_PASSWORD_PATH]}")
-            def expandedPath = expandContextVarsInPath(context, input[GIT_PASSWORD_PATH])
+            logger.debug("using password path ${commonConfig.gitPasswordPath}")
+            def expandedPath = expandContextVarsInPath(context, commonConfig.gitPasswordPath)
 
             def data = loadStoragePathData(context, expandedPath)
 

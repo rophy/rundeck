@@ -177,7 +177,7 @@
     <g:set var="jobstatus" value="${scmExportStatus?.get(scheduledExecution.extid)}"/>
     <g:set var="exportStateClean" value="${jobstatus?.synchState?.toString()=='CLEAN'}"/>
     <g:set var="exportStateCreate" value="${'CREATE_NEEDED'==jobstatus?.synchState?.toString()}"/>
-        <g:each in="${scmExportJobActions}" var="action">
+    <g:each in="${jobstatus?.actions}" var="action">
         <g:if test="${action.id == '-'}">
             <li class="divider"></li>
         </g:if>
@@ -187,7 +187,7 @@
                           model="[action:action,
                                   integration:'export',
                                   project:params.project,
-                                  linkparams:[jobIds: scheduledExecution.extid]]"
+                                  linkparams:[id: scheduledExecution.extid]]"
                 />
 
             </li>
@@ -195,11 +195,12 @@
     </g:each>
     <g:unless test="${exportStateCreate}">
         <li><g:link controller="scm"
-                    params="[project: scheduledExecution.project,jobId:scheduledExecution.extid,integration: 'export']"
+                    params="[project: scheduledExecution.project,id:scheduledExecution.extid,integration: 'export']"
                     action="diff"
                     >
             <g:render template="/scm/statusBadge"
                       model="[exportStatus: jobstatus?.synchState?.toString(),
+                              importStatus: null,
                               text  : '',
                               notext: true,
                               integration: 'export',
@@ -230,7 +231,7 @@
     <g:unless test="${importStateUnknown}">
     <li>
         <g:link controller="scm"
-                params="[project: scheduledExecution.project,jobId:scheduledExecution.extid,integration: 'import']"
+                params="[project: scheduledExecution.project,id:scheduledExecution.extid,integration: 'import']"
                 action="diff">
             <g:render template="/scm/statusBadge"
                   model="[importStatus: jobstatus?.synchState?.toString(),
@@ -252,10 +253,11 @@
         <li class="dropdown-header">
             <g:render template="/scm/statusBadge"
                       model="[importStatus: jobstatus?.synchState?.toString(),
+                              exportStatus:null,
                               text: '',
                               notext: false,
                               integration: 'import',
-                              exportCommit: jobstatus?.commit]"
+                              importCommit: jobstatus?.commit]"
             />
         </li>
     </g:if>

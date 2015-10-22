@@ -1,10 +1,13 @@
 package org.rundeck.plugin.scm.git
 
+import com.dtolabs.rundeck.core.jobs.JobReference
+import com.dtolabs.rundeck.plugins.scm.JobChangeEvent
 import com.dtolabs.rundeck.plugins.scm.JobExportReference
 import com.dtolabs.rundeck.core.jobs.JobRevReference
 import com.dtolabs.rundeck.plugins.scm.JobSerializer
 import com.dtolabs.rundeck.plugins.scm.ScmOperationContext
 import com.dtolabs.rundeck.plugins.scm.ScmPluginException
+import com.dtolabs.rundeck.plugins.scm.ScmPluginInvalidInput
 import com.dtolabs.rundeck.plugins.scm.ScmUserInfo
 import com.dtolabs.rundeck.plugins.scm.ScmUserInfoMissing
 import com.dtolabs.rundeck.plugins.scm.SynchState
@@ -13,6 +16,8 @@ import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.lib.PersonIdent
 import org.eclipse.jgit.revwalk.RevCommit
 import org.eclipse.jgit.util.FileUtils
+import org.rundeck.plugin.scm.git.config.Config
+import org.rundeck.plugin.scm.git.config.Export
 import org.rundeck.plugin.scm.git.exp.actions.CommitJobsAction
 import org.rundeck.plugin.scm.git.exp.actions.TagAction
 import spock.lang.Specification
@@ -41,23 +46,26 @@ class GitExportPluginSpec extends Specification {
         given:
 
         def gitdir = new File(tempdir, 'scm')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : new File(tempdir, 'origin'),
+        Map<String, String> input = [
+                dir                  : gitdir.absolutePath,
+                pathTemplate         : '${job.group}${job.name}-${job.id}.xml',
+                branch               : 'master',
+                committerName        : 'test user',
+                committerEmail       : 'test@example.com',
+                strictHostKeyChecking: 'yes',
+                format               : 'xml',
+                url                  : new File(tempdir, 'origin'),
         ]
-        config.remove(requiredInputName)
+        input.remove(requiredInputName)
 
         when:
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def config = Config.create(Export, input)
 
         then:
-        IllegalArgumentException e = thrown()
+        ScmPluginInvalidInput e = thrown()
         e.message == requiredInputName + ' cannot be null'
+        e.report.errors[requiredInputName] == 'cannot be null'
+
 
 
         where:
@@ -68,6 +76,8 @@ class GitExportPluginSpec extends Specification {
         _ | 'committerName'
         _ | 'committerEmail'
         _ | 'url'
+        _ | 'strictHostKeyChecking'
+        _ | 'format'
 
     }
 
@@ -76,22 +86,15 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
-
+        Export config = createTestConfig(gitdir, origindir)
         //create a git dir
         def git = createGit(origindir)
         git.close()
 
+        def context = Mock(ScmOperationContext)
         when:
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(context)
 
         then:
         gitdir.isDirectory()
@@ -99,32 +102,57 @@ class GitExportPluginSpec extends Specification {
 
     }
 
+    def "create plugin, using config.format in the path template"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(
+                gitdir,
+                origindir,
+                [
+                        pathTemplate: 'blah.${config.format}',
+                        format      : format
+                ]
+        )
+        //create a git dir
+        createGit(origindir).close()
+
+        //create plugin
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(Mock(ScmOperationContext))
+
+        when:
+        def path = plugin.mapper.fileForJob(Mock(JobReference))
+
+        then:
+        path == new File(gitdir, 'blah.' + format)
+
+        where:
+        format | _
+        'xml'  | _
+        'yaml' | _
+    }
+
     def "get input view for commit action"() {
         given:
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
         def context = Mock(ScmOperationContext)
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(context)
         def path = 'testfile'
         def localfile = new File(gitdir, path)
         localfile << 'blah'
 
         when:
-        def view = plugin.getInputViewForAction(context,GitExportPlugin.JOB_COMMIT_ACTION_ID)
+        def view = plugin.getInputViewForAction(context, GitExportPlugin.JOB_COMMIT_ACTION_ID)
 
         then:
         view.title == "Commit Changes to Git"
@@ -138,26 +166,34 @@ class GitExportPluginSpec extends Specification {
 
     }
 
+    static Export createTestConfig(File gitdir, File origindir, Map<String, String> override = [:]) {
+        Map<String, String> input = [
+                dir                  : gitdir.absolutePath,
+                pathTemplate         : '${job.group}${job.name}-${job.id}.xml',
+                branch               : 'master',
+                committerName        : 'test user',
+                committerEmail       : 'test@example.com',
+                format               : 'xml',
+                strictHostKeyChecking: 'yes',
+                url                  : origindir.absolutePath
+        ] + override
+        def config = Config.create(Export, input)
+        config
+    }
+
     def "get job status, does not exist in repo"() {
         given:
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
 
         git.close()
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(Mock(ScmOperationContext))
 
         def serializer = Mock(JobSerializer)
         def jobref = Stub(JobExportReference) {
@@ -183,22 +219,15 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         def commit = addCommitFile(origindir, git, 'a/b/name-xyz.xml', 'blah')
 
         git.close()
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(Mock(ScmOperationContext))
 
         def serializer = Mock(JobSerializer)
         def jobref = Stub(JobExportReference) {
@@ -240,14 +269,7 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
@@ -256,8 +278,8 @@ class GitExportPluginSpec extends Specification {
         }
 
         git.close()
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(Mock(ScmOperationContext))
 
         def serializer = Mock(JobSerializer)
         def jobref = Stub(JobExportReference) {
@@ -292,7 +314,7 @@ class GitExportPluginSpec extends Specification {
     }
 
 
-    RevCommit addCommitFile(final File gitdir, final Git git, final String path, final String content) {
+    static RevCommit addCommitFile(final File gitdir, final Git git, final String path, final String content) {
         def outfile = new File(gitdir, path)
         outfile.parentFile.mkdirs()
         outfile.withOutputStream {
@@ -314,20 +336,13 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : template,
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir, [pathTemplate: template])
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(Mock(ScmOperationContext))
 
 
         def jobref = Stub(JobRevReference) {
@@ -370,19 +385,13 @@ class GitExportPluginSpec extends Specification {
         ltemp.delete()
         def gitdir = new File(ltemp, 'scm')
         def origindir = new File(ltemp, 'origin')
-        def config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : 'test user',
-                committerEmail: 'test@example.com',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
+        def ctxt = Mock(ScmOperationContext)
         //create a git dir
         createGit(origindir)
-        def plugin = new GitExportPlugin(config, 'test')
-        plugin.initialize()
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
 
         def git = Git.open(gitdir)
         def path = 'testfile'
@@ -476,34 +485,27 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : '${user.fullName}',
-                committerEmail: '${user.email}',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
         def userInfo = Mock(ScmUserInfo)
-        def ctxt = Mock(ScmOperationContext){
+        def ctxt = Mock(ScmOperationContext) {
             getUserInfo() >> userInfo
         }
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(ctxt)
 
         def jobref = Stub(JobExportReference)
 
         def input = [:]
         when:
-        def result = plugin.export(ctxt,GitExportPlugin.JOB_COMMIT_ACTION_ID, [] as Set, [] as Set, input)
+        def result = plugin.export(ctxt, GitExportPlugin.JOB_COMMIT_ACTION_ID, [] as Set, [] as Set, input)
 
         then:
         ScmPluginException e = thrown()
-        e.message=='No changes to local git repo need to be exported'
+        e.message == 'No changes to local git repo need to be exported'
 
     }
 
@@ -512,23 +514,16 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : '${user.fullName}',
-                committerEmail: '${user.email}',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
         def userInfo = Mock(ScmUserInfo)
-        def ctxt = Mock(ScmOperationContext){
+        def ctxt = Mock(ScmOperationContext) {
             getUserInfo() >> userInfo
         }
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(ctxt)
         def localfile = new File(gitdir, 'blah')
         localfile << 'blah'
@@ -536,7 +531,7 @@ class GitExportPluginSpec extends Specification {
         def jobref = Stub(JobExportReference)
         def input = [:]
         when:
-        def result = plugin.export(ctxt,GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
+        def result = plugin.export(ctxt, GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
 
         then:
         ScmPluginException e = thrown()
@@ -548,32 +543,25 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : '${user.fullName}',
-                committerEmail: '${user.email}',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
 
         def userInfo = Mock(ScmUserInfo)
-        def ctxt = Mock(ScmOperationContext){
+        def ctxt = Mock(ScmOperationContext) {
             getUserInfo() >> userInfo
         }
 
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(ctxt)
 
 
         def jobref = Stub(JobExportReference)
         def input = [:]
         when:
-        def result = plugin.export(ctxt,GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
+        def result = plugin.export(ctxt, GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
 
         then:
         ScmPluginException e = thrown()
@@ -585,25 +573,18 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
-                committerName : '${user.fullName}',
-                committerEmail: '${user.email}',
-                url           : origindir
-        ]
+        Export config = createTestConfig(gitdir, origindir)
 
         //create a git dir
         def git = createGit(origindir)
         git.close()
 
         def userInfo = Mock(ScmUserInfo)
-        def ctxt = Mock(ScmOperationContext){
+        def ctxt = Mock(ScmOperationContext) {
             getUserInfo() >> userInfo
         }
 
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(ctxt)
         def localfile = new File(gitdir, 'blah')
         localfile << 'blah'
@@ -611,7 +592,7 @@ class GitExportPluginSpec extends Specification {
 
         def input = [commitMessage: "test"]
         when:
-        def result = plugin.export(ctxt,GitExportPlugin.JOB_COMMIT_ACTION_ID, [] as Set, [] as Set, input)
+        def result = plugin.export(ctxt, GitExportPlugin.JOB_COMMIT_ACTION_ID, [] as Set, [] as Set, input)
 
         then:
         ScmPluginException e = thrown()
@@ -623,14 +604,10 @@ class GitExportPluginSpec extends Specification {
 
         def gitdir = new File(tempdir, 'scm')
         def origindir = new File(tempdir, 'origin')
-        Map<String,String> config = [
-                dir           : gitdir.absolutePath,
-                pathTemplate  : '${job.group}${job.name}-${job.id}.xml',
-                branch        : 'master',
+        Export config = createTestConfig(gitdir, origindir, [
                 committerName : '${user.fullName}',
-                committerEmail: '${user.email}',
-                url           : origindir
-        ]
+                committerEmail: '${user.email}',]
+        )
 
         //create a git dir
         def git = createGit(origindir)
@@ -640,11 +617,11 @@ class GitExportPluginSpec extends Specification {
             getFullName() >> userName
             getEmail() >> userEmail
         }
-        def ctxt = Mock(ScmOperationContext){
+        def ctxt = Mock(ScmOperationContext) {
             getUserInfo() >> userInfo
         }
 
-        def plugin = new GitExportPlugin(config, 'test')
+        def plugin = new GitExportPlugin(config)
         plugin.initialize(ctxt)
         def localfile = new File(gitdir, 'blah')
         localfile << 'blah'
@@ -659,7 +636,7 @@ class GitExportPluginSpec extends Specification {
         }
         def input = [message: "Test"]
         when:
-        def result = plugin.export(ctxt,GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
+        def result = plugin.export(ctxt, GitExportPlugin.JOB_COMMIT_ACTION_ID, [jobref] as Set, [] as Set, input)
 
         then:
         ScmUserInfoMissing e = thrown()
@@ -670,5 +647,266 @@ class GitExportPluginSpec extends Specification {
         null     | null      | 'committerName'
         'bob'    | null      | 'committerEmail'
         null     | 'a@b'     | 'committerName'
+    }
+
+    def "job change delete removes file"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(gitdir, origindir)
+
+        //create a git dir
+        def git = createGit(origindir)
+        git.close()
+
+        def ctxt = Mock(ScmOperationContext) {
+        }
+
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
+        def commit = addCommitFile(gitdir, plugin.git, 'blah-xyz.xml', 'blah')
+        def localfile = new File(gitdir, 'blah-xyz.xml')
+
+        def serializer = Mock(JobSerializer)
+        def jobref = Stub(JobExportReference) {
+            getJobName() >> 'blah'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        JobChangeEvent event = Mock(JobChangeEvent) {
+            getOriginalJobReference() >> jobref
+            getJobReference() >> jobref
+            getEventType() >> JobChangeEvent.JobChangeEventType.DELETE
+        }
+
+        when:
+        def result = plugin.jobChanged(event, jobref)
+
+        then:
+        !localfile.exists()
+        plugin.jobStateMap['xyz'] == null
+        result != null
+        result.synchState == SynchState.EXPORT_NEEDED
+    }
+
+    def "job change modify overwrites file"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(gitdir, origindir)
+
+        //create a git dir
+        def git = createGit(origindir)
+        git.close()
+
+        def ctxt = Mock(ScmOperationContext) {
+        }
+
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
+        def commit = addCommitFile(gitdir, plugin.git, 'blah-xyz.xml', 'blah')
+        def localfile = new File(gitdir, 'blah-xyz.xml')
+
+        def serializer = Mock(JobSerializer) {
+            1 * serialize('xml', _) >> { args ->
+                args[1].write('newcontent'.bytes)
+                return 10
+            }
+        }
+        def jobref = Stub(JobExportReference) {
+            getJobName() >> 'blah'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        JobChangeEvent event = Mock(JobChangeEvent) {
+            getOriginalJobReference() >> jobref
+            getJobReference() >> jobref
+            getEventType() >> theEventType
+        }
+
+        when:
+        def result = plugin.jobChanged(event, jobref)
+
+        then:
+        localfile.exists()
+        localfile.text == 'newcontent'
+        plugin.jobStateMap['xyz'] != null
+        result != null
+        result.synchState == SynchState.EXPORT_NEEDED
+
+        where:
+        theEventType                             | _
+        JobChangeEvent.JobChangeEventType.MODIFY | _
+    }
+    def "job change serializer fails does not overwrite file"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(gitdir, origindir)
+
+        //create a git dir
+        def git = createGit(origindir)
+        git.close()
+
+        def ctxt = Mock(ScmOperationContext) {
+        }
+
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
+        def commit = addCommitFile(gitdir, plugin.git, 'blah-xyz.xml', 'blah')
+        def localfile = new File(gitdir, 'blah-xyz.xml')
+
+        def serializer = Mock(JobSerializer) {
+            1 * serialize('xml', _) >> { args ->
+                throw new IllegalArgumentException('failure')
+            }
+        }
+        def jobref = Stub(JobExportReference) {
+            getJobName() >> 'blah'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        JobChangeEvent event = Mock(JobChangeEvent) {
+            getOriginalJobReference() >> jobref
+            getJobReference() >> jobref
+            getEventType() >> theEventType
+        }
+
+        when:
+        def result = plugin.jobChanged(event, jobref)
+
+        then:
+        localfile.exists()
+        localfile.text == 'blah'
+        plugin.jobStateMap['xyz'] != null
+        result != null
+        result.synchState == SynchState.CLEAN
+
+        where:
+        theEventType                             | _
+        JobChangeEvent.JobChangeEventType.MODIFY | _
+    }
+
+    def "job change create creates file"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(gitdir, origindir)
+
+        //create a git dir
+        def git = createGit(origindir)
+        git.close()
+
+        def ctxt = Mock(ScmOperationContext) {
+        }
+
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
+        def localfile = new File(gitdir, 'blah-xyz.xml')
+
+        def serializer = Mock(JobSerializer) {
+            1 * serialize('xml', _) >> { args ->
+                args[1].write('newcontent'.bytes)
+                return 10
+            }
+        }
+        def jobref = Stub(JobExportReference) {
+            getJobName() >> 'blah'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        JobChangeEvent event = Mock(JobChangeEvent) {
+            getOriginalJobReference() >> jobref
+            getJobReference() >> jobref
+            getEventType() >> theEventType
+        }
+
+        when:
+        def result = plugin.jobChanged(event, jobref)
+
+        then:
+        localfile.exists()
+        localfile.text == 'newcontent'
+        plugin.jobStateMap['xyz'] != null
+        result != null
+        result.synchState == SynchState.CREATE_NEEDED
+
+        where:
+        theEventType                             | _
+        JobChangeEvent.JobChangeEventType.CREATE | _
+    }
+
+    def "job change modify-rename removes old and writes new file"() {
+        given:
+
+        def gitdir = new File(tempdir, 'scm')
+        def origindir = new File(tempdir, 'origin')
+        Export config = createTestConfig(gitdir, origindir)
+
+        //create a git dir
+        def git = createGit(origindir)
+        git.close()
+
+        def ctxt = Mock(ScmOperationContext) {
+        }
+
+        def plugin = new GitExportPlugin(config)
+        plugin.initialize(ctxt)
+        def commit = addCommitFile(gitdir, plugin.git, 'blah-xyz.xml', 'blah')
+        def localfile = new File(gitdir, 'blah-xyz.xml')
+        def localnewfile = new File(gitdir, 'blah2-xyz.xml')
+
+        def serializer = Mock(JobSerializer) {
+            1 * serialize('xml', _) >> { args ->
+                args[1].write('newcontent'.bytes)
+                return 10
+            }
+        }
+        def origref = Stub(JobExportReference) {
+            getJobName() >> 'blah'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        def jobref = Stub(JobExportReference) {
+            getJobName() >> 'blah2'
+            getGroupPath() >> ''
+            getId() >> 'xyz'
+            getVersion() >> 1
+            getJobSerializer() >> serializer
+        }
+        JobChangeEvent event = Mock(JobChangeEvent) {
+            getOriginalJobReference() >> origref
+            getJobReference() >> jobref
+            getEventType() >> theEventType
+        }
+
+        when:
+        def result = plugin.jobChanged(event, jobref)
+
+        then:
+        !localfile.exists()
+        localnewfile.exists()
+        localnewfile.text == 'newcontent'
+        plugin.jobStateMap['xyz'] != null
+        result != null
+        result.synchState == SynchState.EXPORT_NEEDED
+
+        where:
+        theEventType                                    | _
+        JobChangeEvent.JobChangeEventType.MODIFY_RENAME | _
     }
 }

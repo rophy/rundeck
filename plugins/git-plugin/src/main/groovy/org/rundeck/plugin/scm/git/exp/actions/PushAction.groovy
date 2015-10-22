@@ -10,6 +10,7 @@ import org.rundeck.plugin.scm.git.BaseAction
 import org.rundeck.plugin.scm.git.BaseGitPlugin
 import org.rundeck.plugin.scm.git.GitExportAction
 import org.rundeck.plugin.scm.git.GitExportPlugin
+import org.rundeck.plugin.scm.git.GitScmCommit
 import org.rundeck.plugin.scm.git.GitUtil
 
 import static org.rundeck.plugin.scm.git.BuilderUtil.inputView
@@ -93,7 +94,7 @@ Pushing to remote branch: `${plugin.branch}`"""
         def pushb = plugin.git.push()
         pushb.setRemote(BaseGitPlugin.REMOTE_NAME)
         pushb.add(plugin.branch)
-        plugin.setupTransportAuthentication(plugin.input.url, context, pushb)
+        plugin.setupTransportAuthentication(plugin.sshConfig, context, pushb)
 
         if (tagref) {
             pushb.add(tagref)
@@ -119,6 +120,7 @@ Pushing to remote branch: `${plugin.branch}`"""
             result.message = "Remote push result: OK. (Commit: ${commit.name})"
         }
         result.id = commit?.name
+        result.commit=new GitScmCommit(GitUtil.metaForCommit(commit))
         return result
     }
 

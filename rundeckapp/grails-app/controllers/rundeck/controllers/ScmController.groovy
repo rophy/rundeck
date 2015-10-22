@@ -2,7 +2,6 @@ package rundeck.controllers
 
 import com.dtolabs.rundeck.core.authorization.AuthContext
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
-import com.dtolabs.rundeck.core.plugins.views.BasicInputView
 import com.dtolabs.rundeck.plugins.scm.SynchState
 import com.dtolabs.rundeck.server.authorization.AuthConstants
 import rundeck.ScheduledExecution
@@ -15,6 +14,8 @@ class ScmController extends ControllerBase {
 
     def static allowedMethods = [
             disable: ['POST'],
+            enable: ['POST'],
+            performActionSubmit: ['POST'],
     ]
 
     def index(String project) {
@@ -74,7 +75,10 @@ class ScmController extends ControllerBase {
 
     def saveSetup(String integration, String project, String type) {
 
-        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject, project)
+        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
+                session.subject,
+                project
+        )
         if (unauthorizedResponse(
                 frameworkService.authorizeApplicationResourceAll(
                         authContext,
@@ -105,7 +109,7 @@ class ScmController extends ControllerBase {
         }
 
         //require type param
-        def result = scmService.savePluginSetup(authContext,integration,project, type, config)
+        def result = scmService.savePluginSetup(authContext, integration, project, type, config)
         def report
         if (result.error || !result.valid) {
             report = result.report
@@ -125,7 +129,7 @@ class ScmController extends ControllerBase {
             //redirect to next action
             flash.message = message(code: 'scmController.action.setup.success.message')
             redirect(
-                    action: 'exportAction',
+                    action: 'performAction',
                     params: [project: project, integration: integration, actionId: result.nextAction.id]
             )
         } else {
@@ -173,7 +177,10 @@ class ScmController extends ControllerBase {
 
     def enable(String integration, String project, String type) {
 
-        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject, project)
+        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
+                session.subject,
+                project
+        )
         if (unauthorizedResponse(
                 frameworkService.authorizeApplicationResourceAll(
                         authContext,
@@ -202,9 +209,12 @@ class ScmController extends ControllerBase {
         }
 
         //require type param
-        def result = scmService.enablePlugin(authContext,integration, project, type)
+        def result = scmService.enablePlugin(authContext, integration, project, type)
         if (result.error) {
-            flash.warn = message(code: "scmController.action.enable.error.message", args: [integration, type])
+            flash.warn = message(
+                    code: "scmController.action.enable.error.message",
+                    args: [integration, type, result.message ?: 'unknown']
+            )
             if (result.message) {
                 flash.error = result.message
             }
@@ -212,7 +222,7 @@ class ScmController extends ControllerBase {
             //redirect to next action
             flash.message = message(code: "scmController.action.enable.success.message", args: [integration, type])
             return redirect(
-                    action: 'exportAction',
+                    action: 'performAction',
                     params: [project: project, integration: integration, actionId: result.nextAction.id]
             )
         } else if (result.valid) {
@@ -228,7 +238,7 @@ class ScmController extends ControllerBase {
         redirect(action: 'index', params: [project: project])
     }
 
-    def exportAction(String integration, String project, String actionId) {
+    def performAction(String integration, String project, String actionId) {
         AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject, project)
 
 
@@ -246,20 +256,20 @@ class ScmController extends ControllerBase {
             return
         }
         if (!scmService.projectHasConfiguredPlugin(integration, project)) {
-            flash.message="No plugin for SCM ${integration} configured for project ${project}"
+            flash.message = "No plugin for SCM ${integration} configured for project ${project}"
             return redirect(action: 'index', params: [project: project])
         }
         def view = scmService.getInputView(authContext, integration, project, actionId)
-        if(!view){
-            response.status=HttpServletResponse.SC_NOT_FOUND
+        if (!view) {
+            response.status = HttpServletResponse.SC_NOT_FOUND
             renderErrorView("Not a valid action: ${actionId}")
         }
         List<String> jobIds = []
         Map deletedPaths = [:]
         List<String> selectedPaths = []
         Map<String, String> renamedJobPaths = scmService.getRenamedJobPathsForProject(params.project)
-        if (params.jobIds) {
-            jobIds = [params.jobIds].flatten()
+        if (params.id) {
+            jobIds = [params.id].flatten()
         } else {
             jobIds = ScheduledExecution.findAllByProject(params.project).collect {
                 it.extid
@@ -273,10 +283,10 @@ class ScmController extends ControllerBase {
             deletedPaths.remove(it)
         }
         def trackingItems = integration == 'import' ? scmService.getTrackingItemsForAction(project, actionId) : null
-        List<ScheduledExecution> jobs=[]
-        def jobMap=[:]
+        List<ScheduledExecution> jobs = []
+        def jobMap = [:]
         def scmStatus = []
-        if( integration=='export'){
+        if (integration == 'export') {
             jobs = jobIds.collect {
                 ScheduledExecution.getByIdOrUUID(it)
             }
@@ -286,15 +296,15 @@ class ScmController extends ControllerBase {
             jobs = jobs.findAll {
                 it.extid in scmStatus.keySet()
             }
-        }else{
+        } else {
             (trackingItems*.jobId).each {
-                jobMap[it]=ScheduledExecution.getByIdOrUUID(it)
+                jobMap[it] = ScheduledExecution.getByIdOrUUID(it)
             }
-            jobs = (jobMap.values() as List).findAll{it!=null}
+            jobs = (jobMap.values() as List).findAll { it != null }
             scmStatus = scmService.importStatusForJobs(jobs)
         }
 
-        def scmProjectStatus = scmService.getPluginStatus(authContext,integration, project)
+        def scmProjectStatus = scmService.getPluginStatus(authContext, integration, project)
         def scmFiles = integration == 'export' ? scmService.exportFilePathsMapForJobRefs(
                 scmService.jobRefsForJobs(jobs)
         ) : null
@@ -306,7 +316,7 @@ class ScmController extends ControllerBase {
                 jobs            : jobs,
                 jobMap          : jobMap,
                 scmStatus       : scmStatus,
-                selected        : params.jobIds ? jobIds : [],
+                selected        : params.id ? jobIds : [],
                 filesMap        : scmFiles,
                 trackingItems   : trackingItems,
                 deletedPaths    : deletedPaths,
@@ -318,7 +328,7 @@ class ScmController extends ControllerBase {
         ]
     }
 
-    def exportActionSubmit(String integration, String project, String actionId) {
+    def performActionSubmit(String integration, String project, String actionId) {
 
         UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
                 session.subject,
@@ -342,7 +352,7 @@ class ScmController extends ControllerBase {
         boolean valid = false
         //cancel modification
         if (params.cancel == 'Cancel') {
-            return redirect(controller: 'scm', action: 'index', params: [project: project])
+            return redirect(controller: 'scheduledExecution', action: 'index', params: [project: project])
         }
 
         withForm {
@@ -354,7 +364,7 @@ class ScmController extends ControllerBase {
         if (!valid) {
             return
         }
-        List<String> jobIds = [params.jobIds].flatten().findAll { it }
+        List<String> jobIds = [params.id].flatten().findAll { it }
 
         List<ScheduledExecution> jobs = jobIds.collect {
             ScheduledExecution.getByIdOrUUID(it)
@@ -396,6 +406,10 @@ class ScmController extends ControllerBase {
                 request.errorHelp = message(code: "scmController.action.saveCommit.userInfoMissing.errorHelp")
             } else {
                 request.error = result.error ? result.message : message(code: "some.input.values.were.not.valid")
+
+                if (result.extendedMessage) {
+                    request.errorHelp = result.extendedMessage
+                }
             }
             def deletedPaths = scmService.deletedExportFilesForProject(project)
             def scmStatus = scmService.exportStatusForJobs(jobs)
@@ -403,15 +417,15 @@ class ScmController extends ControllerBase {
                     scmService.jobRefsForJobs(jobs)
             ) : null
 
-            def scmProjectStatus = scmService.getPluginStatus(authContext,integration, params.project)
+            def scmProjectStatus = scmService.getPluginStatus(authContext, integration, params.project)
             def trackingItems = integration == 'import' ? scmService.getTrackingItemsForAction(project, actionId) : null
 
-            render view: 'exportAction',
+            render view: 'performAction',
                    model: [
-                           actionView      : scmService.getInputView(authContext,integration, project, actionId),
+                           actionView      : scmService.getInputView(authContext, integration, project, actionId),
                            jobs            : jobs,
                            scmStatus       : scmStatus,
-                           selected        : params.jobIds ? jobIds : [],
+                           selected        : params.id ? jobIds : [],
                            filesMap        : scmFiles,
                            trackingItems   : trackingItems,
                            selectedItems   : chosenTrackedItems,
@@ -429,6 +443,9 @@ class ScmController extends ControllerBase {
             def commitid = result.commitId
             if (result.message) {
                 flash.message = result.message
+                if (result.extendedMessage) {
+                    flash.extendedMessage = result.extendedMessage
+                }
             } else {
                 def code = "scmController.action.export.multi.succeed.message"
                 def jobIdent = ''
@@ -452,6 +469,9 @@ class ScmController extends ControllerBase {
         } else {
             if (result.message) {
                 flash.message = result.message
+                if (result.extendedMessage) {
+                    flash.extendedMessage = result.extendedMessage
+                }
             } else {
                 flash.message = message(
                         code: 'scmController.action.import.success',
@@ -484,13 +504,13 @@ class ScmController extends ControllerBase {
         }
     }
 
-    def diff(String project, String jobId, String integration) {
+    def diff(String project, String id, String integration) {
         AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject, project)
 
 
 
         def isExport = integration == 'export'
-        def diffAction = isExport ?AuthConstants.ACTION_EXPORT:AuthConstants.ACTION_IMPORT
+        def diffAction = isExport ? AuthConstants.ACTION_EXPORT : AuthConstants.ACTION_IMPORT
         if (unauthorizedResponse(
                 frameworkService.authorizeApplicationResourceAny(authContext,
                                                                  frameworkService.authResourceForProject(project),
@@ -500,19 +520,20 @@ class ScmController extends ControllerBase {
         )) {
             return
         }
-        if (!scmService.projectHasConfiguredPlugin(integration,project)) {
+        if (!scmService.projectHasConfiguredPlugin(integration, project)) {
             return redirect(action: 'index', params: [project: project])
         }
-        if (!jobId) {
+        if (!id) {
             flash.message = "No jobId Selected"
             return redirect(action: 'index', params: [project: project])
         }
-        def job = ScheduledExecution.getByIdOrUUID(jobId)
+        def job = ScheduledExecution.getByIdOrUUID(id)
         def exportStatus = isExport ? scmService.exportStatusForJobs([job]) : null
         def importStatus = isExport ? null : scmService.importStatusForJobs([job])
         def scmFilePaths = isExport ? scmService.exportFilePathsMapForJobs([job]) : null
         def diffResult = isExport ? scmService.exportDiff(project, job) : scmService.importDiff(project, job)
-        def scmExportRenamedPath = isExport ?  scmService.getRenamedJobPathsForProject(params.project)?.get(job.extid) : null
+        def scmExportRenamedPath = isExport ? scmService.getRenamedJobPathsForProject(params.project)?.get(job.extid) :
+                null
         if (params.download == 'true') {
             if (params.download) {
                 response.addHeader("Content-Disposition", "attachment; filename=\"${job.extid}.diff\"")

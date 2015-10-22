@@ -5,9 +5,10 @@ package com.dtolabs.rundeck.plugins.scm;
  */
 public class ScmExportResultImpl implements ScmExportResult {
     private boolean success;
-    private boolean error;
     private String message;
+    private String extendedMessage;
     private String id;
+    private ScmCommitInfo commit;
 
     public boolean isSuccess() {
         return success;
@@ -18,12 +19,9 @@ public class ScmExportResultImpl implements ScmExportResult {
     }
 
     public boolean isError() {
-        return error;
+        return !success;
     }
 
-    public void setError(boolean error) {
-        this.error = error;
-    }
 
     @Override
     public String getMessage() {
@@ -41,5 +39,23 @@ public class ScmExportResultImpl implements ScmExportResult {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    @Override
+    public ScmCommitInfo getCommit() {
+        return commit;
+    }
+
+    public void setCommit(ScmCommitInfo commit) {
+        this.commit = commit;
+    }
+
+    @Override
+    public String getExtendedMessage() {
+        return extendedMessage;
+    }
+
+    public void setExtendedMessage(String extendedMessage) {
+        this.extendedMessage = extendedMessage;
     }
 }

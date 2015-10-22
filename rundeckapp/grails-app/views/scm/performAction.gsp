@@ -25,7 +25,7 @@
 
 <div class="row">
     <div class="col-sm-12 col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
-        <g:form action="exportActionSubmit"
+        <g:form action="performActionSubmit"
                 params="${[project: params.project, integration: integration]}"
                 useToken="true"
                 method="post" class="form form-horizontal">
@@ -77,7 +77,7 @@
                                                 <g:set var="jobstatus" value="${scmStatus?.get(job.extid)}"/>
                                                 <g:if test="${jobstatus?.synchState?.toString() != 'CLEAN'}">
 
-                                                    <g:checkBox name="jobIds" value="${job.extid}"
+                                                    <g:checkBox name="id" value="${job.extid}"
                                                                 checked="${selected?.contains(job.extid)}"/>
                                                 </g:if>
 
@@ -102,7 +102,7 @@
 
                                             </label>
                                             <g:link action="diff" class="btn btn-xs btn-info"
-                                                    params="${[project: params.project, jobId: job.extid, integration: 'export']}">
+                                                    params="${[project: params.project, id: job.extid, integration: 'export']}">
                                                 <g:message code="button.View.Diff.title"/>
                                             </g:link>
                                         </div>
@@ -137,12 +137,12 @@
                                     <div class=" row row-spacing">
                                         <div class=" col-sm-12">
                                             <span class="textbtn textbtn-default"
-                                                  onclick="jQuery('input[name=jobIds]').prop('checked', true)">
+                                                  onclick="jQuery('input[name=id]').prop('checked', true)">
                                                 <g:message code="select.all"/>
                                             </span>
                                         &bull;
                                             <span class="textbtn textbtn-default"
-                                                  onclick="jQuery('input[name=jobIds]').prop('checked', false)">
+                                                  onclick="jQuery('input[name=id]').prop('checked', false)">
                                                 <g:message code="select.none"/>
                                             </span>
                                         </div>
@@ -260,7 +260,7 @@
                                             <g:if test="${job}">
 
                                                 <g:link action="diff" class="btn btn-xs btn-info"
-                                                        params="${[project: params.project, jobId: job.extid, integration: 'import']}">
+                                                        params="${[project: params.project, id: job.extid, integration: 'import']}">
                                                     <g:message code="button.View.Diff.title"/>
                                                 </g:link>
                                             </g:if>

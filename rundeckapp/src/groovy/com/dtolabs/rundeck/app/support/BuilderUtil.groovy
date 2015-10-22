@@ -45,13 +45,19 @@ class BuilderUtil{
     public static PLURAL_SUFFIX="[s]"
     public static PLURAL_REPL="s"
     public static CDATA_SUFFIX="<cdata>"
+    public static NEW_LINE = System.getProperty('line.separator')
     Map<Class,Closure> converters=[:]
     ArrayList context
     boolean canonical=false
+    String lineEndingChars = NEW_LINE
+    /**
+     * If true, replace all line endings in string output with the value of lineEndingChars
+     */
+    boolean forceLineEndings = false
     public BuilderUtil(){
         context=new ArrayList()
     }
-    
+
     public mapToDom( Map map, builder){
         //generate a builder strucure using the map components
         for(Object o: canonical?map.keySet().sort():map.keySet()){
@@ -110,6 +116,9 @@ class BuilderUtil{
             }else{
                 os=obj.toString()
             }
+            if(forceLineEndings) {
+                os = replaceLineEndings(os,lineEndingChars)
+            }
             if(key.endsWith(CDATA_SUFFIX)){
                 builder."${key-CDATA_SUFFIX}"(){
                     mkp.yieldUnescaped("<![CDATA["+os.replaceAll(']]>',']]]]><![CDATA[>')+"]]>")
@@ -120,6 +129,15 @@ class BuilderUtil{
         }
     }
 
+    /**
+     * Replace all line endings with the given string
+     * @param os input string
+     * @param lineEnding line ending string to use
+     * @return new string
+     */
+    public static String replaceLineEndings(String os, String lineEnding) {
+        os.replaceAll('(\r\n|\r|\n)', lineEnding)
+    }
 
     /**
      * Add entry to the map for the given key, converting the key into an

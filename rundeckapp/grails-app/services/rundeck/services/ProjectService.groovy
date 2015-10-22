@@ -42,6 +42,7 @@ class ProjectService implements InitializingBean{
     def logFileStorageService
     def workflowService
     def authorizationService
+    def scmService
     static transactional = false
 
     private exportJob(ScheduledExecution job, Writer writer)
@@ -987,6 +988,10 @@ class ProjectService implements InitializingBean{
      */
     def deleteProject(IRundeckProject project, Framework framework, AuthContext authContext, String username){
         def result = [success: false]
+
+        //disable scm
+        scmService.removeAllPluginConfiguration(project.name, null)
+
         BaseReport.withTransaction { TransactionStatus status ->
 
             try {
@@ -997,7 +1002,6 @@ class ProjectService implements InitializingBean{
                 ExecReport.findAllByCtxProject(project.name).each { e ->
                     e.delete(flush: true)
                 }
-                def files=[]
                 //delete all jobs with their executions
                 ScheduledExecution.findAllByProject(project.name).each{ se->
                     def sedresult=scheduledExecutionService.deleteScheduledExecution(se, true, authContext,username)
@@ -1010,17 +1014,8 @@ class ProjectService implements InitializingBean{
                 def other=allexecs.size()
                 executionService.deleteBulkExecutionIds(allexecs*.id, authContext, username)
 
-                log.error("${other} other executions deleted")
-                //delete all files
-                def deletedfiles=0
-                files.each{file->
-                    if (null != file && file.exists() && !FileUtils.deleteQuietly(file)) {
-                        log.warn("Failed to delete file while deleting project ${project.name}: ${file.absolutePath}")
-                    }else{
-                        deletedfiles++
-                    }
-                }
-                log.error("${deletedfiles} files removed")
+                log.debug("${other} other executions deleted")
+
                 result = [success: true]
             } catch (Exception e) {
                 status.setRollbackOnly()

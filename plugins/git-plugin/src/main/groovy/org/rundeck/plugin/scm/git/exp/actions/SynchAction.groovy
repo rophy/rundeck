@@ -55,8 +55,9 @@ Pulling from remote branch: `${plugin.branch}`"""
                         description """Choose a strategy to resolve conflicts in the synched files.
 
 * `ours` - apply our changes over theirs
-* `theirs` - apply their changes over ours"""
-                        values(MergeStrategy.get()*.name)
+* `theirs` - apply their changes over ours
+* `recursive` - recursive merge"""
+                        values([MergeStrategy.OURS,MergeStrategy.THEIRS,MergeStrategy.RECURSIVE]*.name)
                         defaultValue "ours"
                         required true
                     },
@@ -101,7 +102,8 @@ Pulling from remote branch: `${plugin.branch}`"""
         def pullResult = plugin.gitPull(context)
         def result = new ScmExportResultImpl()
         result.success = pullResult.successful
-        result.message = pullResult.toString()
+        result.message = "Git Pull "+(result.success?'succeeded':'failed')
+        result.extendedMessage = pullResult.mergeResult?.toString()?:null
         result
     }
 }
