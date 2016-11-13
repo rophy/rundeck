@@ -1,17 +1,17 @@
 /*
- * Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -48,6 +48,7 @@ public class PluginManagerService implements FrameworkSupportService, ServicePro
     private File extdir;
     private File cachedir;
     private  PluginCache cache;
+    private Map<String, String> serviceAliases;
     /**
      * Create a PluginManagerService
      */
@@ -135,6 +136,43 @@ public class PluginManagerService implements FrameworkSupportService, ServicePro
         }
     }
 
+    @Override
+    public PluginResourceLoader getResourceLoader(String service, String provider) throws ProviderLoaderException {
+        PluginResourceLoader pluginResourceLoader = tryResourceLoader(service, provider);
+        if (pluginResourceLoader == null && serviceAliases != null && serviceAliases.containsKey(service)) {
+            pluginResourceLoader = tryResourceLoader(serviceAliases.get(service), provider);
+        }
+        return pluginResourceLoader;
+    }
+
+    private PluginResourceLoader tryResourceLoader(String service, String provider) throws ProviderLoaderException {
+        ProviderLoader loaderForIdent = getCache().getLoaderForIdent(new ProviderIdent(service, provider));
+        if (null != loaderForIdent && loaderForIdent instanceof PluginResourceLoader) {
+            return (PluginResourceLoader) loaderForIdent;
+        }
+        return null;
+    }
+
+    @Override
+    public PluginMetadata getPluginMetadata(final String service, final String provider)
+            throws ProviderLoaderException
+    {
+        PluginMetadata pluginMetadata = tryPluginMetadata(service, provider);
+        if (pluginMetadata == null && serviceAliases != null && serviceAliases.containsKey(service)) {
+            pluginMetadata = tryPluginMetadata(serviceAliases.get(service), provider);
+        }
+        return pluginMetadata;
+    }
+
+    private PluginMetadata tryPluginMetadata(String service, final String provider)
+            throws ProviderLoaderException
+    {
+        ProviderLoader loaderForIdent = getCache().getLoaderForIdent(new ProviderIdent(service, provider));
+        if (null != loaderForIdent && loaderForIdent instanceof PluginMetadata) {
+            return (PluginMetadata) loaderForIdent;
+        }
+        return null;
+    }
 
     public File getExtdir() {
         return extdir;
@@ -158,5 +196,13 @@ public class PluginManagerService implements FrameworkSupportService, ServicePro
 
     public void setCache(PluginCache cache) {
         this.cache = cache;
+    }
+
+    public Map<String, String> getServiceAliases() {
+        return serviceAliases;
+    }
+
+    public void setServiceAliases(Map<String, String> serviceAliases) {
+        this.serviceAliases = serviceAliases;
     }
 }

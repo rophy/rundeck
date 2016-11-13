@@ -1,17 +1,17 @@
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.dtolabs.rundeck.core.dispatcher;
@@ -398,6 +398,35 @@ public class TestDataContextUtils extends AbstractBaseTest {
             assertEquals("test line 2 some data ", line1);
             assertFalse(br.ready());
             assertNull(br.readLine());
+
+    }
+    public void testReplaceTokensInScriptSlashChars() throws Exception {
+        Framework fwk = getFrameworkInstance();
+        //test content
+        final HashMap<String, Map<String, String>> data = new HashMap<>();
+        HashMap<String, String> testdata = new HashMap<>();
+        testdata.put("data1/data1", "blah");
+        testdata.put("data2/data2", "blee");
+        data.put("test", testdata);
+        File temp = DataContextUtils.replaceTokensInScript("test script some data @test.data1/data1@\n"
+                                                           + "test line 2 some data @test.data2/data2@\n",
+                                                           data,
+                                                           fwk, null
+        );
+        assertNotNull(temp);
+        assertTrue(temp.length() > 0);
+        //test content
+        BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(temp)));
+        assertTrue(br.ready());
+        final String line0 = br.readLine();
+        assertNotNull(line0);
+        assertEquals("test script some data blah", line0);
+        assertTrue(br.ready());
+        final String line1 = br.readLine();
+        assertNotNull(line1);
+        assertEquals("test line 2 some data blee", line1);
+        assertFalse(br.ready());
+        assertNull(br.readLine());
 
     }
 

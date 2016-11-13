@@ -1,12 +1,11 @@
-package com.dtolabs.rundeck.app.support
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +13,8 @@ package com.dtolabs.rundeck.app.support
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- 
+
+package com.dtolabs.rundeck.app.support
 /*
  * ScheduledExecutionQuery.java
  * 
@@ -35,6 +35,8 @@ public class ScheduledExecutionQuery extends BaseQuery{
     String loglevelFilter
     String idlist
     Boolean scheduledFilter
+    Boolean scheduleEnabledFilter
+    Boolean executionEnabledFilter
     String serverNodeUUIDFilter
 
     /**
@@ -57,7 +59,9 @@ public class ScheduledExecutionQuery extends BaseQuery{
      * Boolean filters
      */
     public final static  BOOL_FILTERS=[
-            'scheduled':'scheduled'
+            'scheduled':'scheduled',
+            'executionEnabled':'executionEnabled',
+            'scheduleEnabled':'scheduleEnabled',
             ]
     /**
      * all filters
@@ -86,6 +90,8 @@ public class ScheduledExecutionQuery extends BaseQuery{
         loglevelFilter(nullable: true)
         idlist(nullable: true)
         scheduledFilter(nullable: true)
+        scheduleEnabledFilter(nullable: true)
+        executionEnabledFilter(nullable: true)
         serverNodeUUIDFilter(size: 36..36, blank: true, nullable: true, validator: { val, obj ->
             if (null == val) return true;
             try { return null != UUID.fromString(val) } catch (IllegalArgumentException e) {

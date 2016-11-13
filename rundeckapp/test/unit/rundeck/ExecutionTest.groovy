@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck
 
 import grails.test.GrailsUnitTestCase
@@ -51,30 +67,40 @@ class ExecutionTest {
     }
     void testExecutionState() {
         Execution se = createBasicExecution()
-        se.dateCompleted=null
+
+        Date now = new Date()
+        Calendar cal = Calendar.getInstance()
+        cal.setTime(now)
+        cal.add(Calendar.HOUR, 2)
+        Date future = cal.getTime()
+
+        se.dateStarted = future
+        assertEquals(ExecutionService.EXECUTION_SCHEDULED,se.executionState)
+        se.dateStarted = null
+        se.dateCompleted = null
         assertEquals(ExecutionService.EXECUTION_RUNNING,se.executionState)
-        se.dateCompleted=new Date()
-        se.status='true'
+        se.dateCompleted  = now
+        se.status = 'true'
         assertEquals(ExecutionService.EXECUTION_SUCCEEDED,se.executionState)
-        se.status='succeeded'
+        se.status = 'succeeded'
         assertEquals(ExecutionService.EXECUTION_SUCCEEDED,se.executionState)
-        se.status='failed'
+        se.status = 'failed'
         assertEquals(ExecutionService.EXECUTION_FAILED,se.executionState)
-        se.status='false'
+        se.status = 'false'
         assertEquals(ExecutionService.EXECUTION_FAILED,se.executionState)
-        se.cancelled=true
+        se.cancelled = true
         assertEquals(ExecutionService.EXECUTION_ABORTED,se.executionState)
-        se.cancelled=false
-        se.willRetry=true
+        se.cancelled = false
+        se.willRetry = true
         assertEquals(ExecutionService.EXECUTION_FAILED_WITH_RETRY,se.executionState)
-        se.cancelled=false
-        se.willRetry=false
-        se.timedOut=true
+        se.cancelled = false
+        se.willRetry = false
+        se.timedOut = true
         assertEquals(ExecutionService.EXECUTION_TIMEDOUT,se.executionState)
-        se.timedOut=false
-        se.status="custom"
+        se.timedOut = false
+        se.status = "custom"
         assertEquals(ExecutionService.EXECUTION_STATE_OTHER,se.executionState)
-        se.status="any string"
+        se.status = "any string"
         assertEquals(ExecutionService.EXECUTION_STATE_OTHER,se.executionState)
     }
     void testStatusSucceededTrue() {

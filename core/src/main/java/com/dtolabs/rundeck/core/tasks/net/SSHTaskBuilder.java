@@ -1,17 +1,17 @@
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -605,7 +605,7 @@ public class SSHTaskBuilder {
                 if (null != privateKeyPassphraseStoragePath) {
                     if (!PathUtil.hasRoot(privateKeyPassphraseStoragePath, "keys")) {
                         throw new BuilderException(
-                                "SSH Private key path is expected to start with \"keys/\": " +
+                                "SSH Private key passphrase path is expected to start with \"keys/\": " +
                                 privateKeyPassphraseStoragePath
                         );
                     }
@@ -638,7 +638,7 @@ public class SSHTaskBuilder {
             case password:
                 final String passwordStoragePath = sshConnectionInfo.getPasswordStoragePath();
                 if (null != passwordStoragePath) {
-                    if (!PathUtil.asPath(passwordStoragePath).getPath().startsWith("keys/")) {
+                    if (!PathUtil.hasRoot(passwordStoragePath, "keys")) {
                         throw new BuilderException("SSH Password storage path is expected to start with \"keys/\": " +
                                 passwordStoragePath);
                     }

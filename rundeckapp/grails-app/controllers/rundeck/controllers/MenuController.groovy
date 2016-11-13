@@ -1,6 +1,24 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.client.utils.Constants
+import com.dtolabs.rundeck.app.api.jobs.info.JobInfo
+import com.dtolabs.rundeck.app.api.jobs.info.JobInfoList
 import com.dtolabs.rundeck.app.support.BaseQuery
 import com.dtolabs.rundeck.app.support.QueueQuery
 import com.dtolabs.rundeck.app.support.ScheduledExecutionQuery
@@ -42,6 +60,7 @@ import rundeck.services.NotificationService
 import rundeck.services.PluginService
 import rundeck.services.ScheduledExecutionService
 import rundeck.services.ScmService
+import rundeck.services.UiPluginService
 import rundeck.services.UserService
 import rundeck.services.framework.RundeckProjectConfigurable
 
@@ -59,6 +78,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
     StoragePluginProviderService storagePluginProviderService
     StorageConverterPluginProviderService storageConverterPluginProviderService
     PluginService pluginService
+
     def configurationService
     ScmService scmService
     def quartzScheduler
@@ -68,6 +88,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
     static allowedMethods = [
             deleteJobfilter:'POST',
             storeJobfilter:'POST',
+            apiJobDetail:'GET',
             apiResumeIncompleteLogstorage:'POST',
             cleanupIncompleteLogStorageAjax:'POST',
             resumeIncompleteLogStorageAjax: 'POST',
@@ -141,6 +162,9 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         return results
     }
     def nowrunningAjax = {QueueQuery query->
+        if('true'!=request.getHeader('x-rundeck-ajax')) {
+            return redirect(action: 'index', controller: 'reports', params: params)
+        }
         def results = nowrunning(query)
         //structure dataset for client-side event status processing
         def running= results.nowrunning.collect {
@@ -155,6 +179,15 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 data['executionString']=map.workflow.commands[0].exec
             }else{
                 data['jobName']=it.scheduledExecution.jobName
+                data['jobGroup']=it.scheduledExecution.groupPath
+                data['jobId']=it.scheduledExecution.extid
+                data['jobPermalink']= createLink(
+                        controller: 'scheduledExecution',
+                        action: 'show',
+                        absolute: true,
+                        id: it.scheduledExecution.extid,
+                        params:[project:it.scheduledExecution.project]
+                )
                 if (it.scheduledExecution && it.scheduledExecution.totalTime >= 0 && it.scheduledExecution.execCount > 0) {
                     data['jobAverageDuration']= Math.floor(it.scheduledExecution.totalTime / it.scheduledExecution.execCount)
                 }
@@ -215,7 +248,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
     def clearJobsFilter = { ScheduledExecutionQuery query ->
         return redirect(action: 'jobs', params: [project: params.project])
     }
-    def jobs = {ScheduledExecutionQuery query ->
+    def jobs (ScheduledExecutionQuery query ){
         
         def User u = userService.findOrCreateUser(session.user)
         if(params.size()<1 && !params.filterName && u ){
@@ -253,8 +286,73 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
             }
         }
     }
-    
-    def jobsFragment = {ScheduledExecutionQuery query ->
+    /**
+     *
+     * @param query
+     * @return
+     */
+    def jobsAjax(ScheduledExecutionQuery query){
+        if('true'!=request.getHeader('x-rundeck-ajax')) {
+            return redirect(action: 'jobs', controller: 'menu', params: params)
+        }
+        if(!params.project){
+            return apiService.renderErrorXml(response, [status: HttpServletResponse.SC_BAD_REQUEST,
+                                                        code: 'api.error.parameter.required', args: ['project']])
+        }
+        query.projFilter = params.project
+        //test valid project
+
+        def exists=frameworkService.existsFrameworkProject(params.project)
+        if(!exists){
+            return apiService.renderErrorXml(response, [status: HttpServletResponse.SC_NOT_FOUND,
+                                                        code: 'api.error.item.doesnotexist', args: ['project',params.project]])
+        }
+        if(query.hasErrors()){
+            return apiService.renderErrorFormat(response,
+                                                [
+                                                        status: HttpServletResponse.SC_BAD_REQUEST,
+                                                        code: "api.error.parameter.error",
+                                                        args: [query.errors.allErrors.collect { message(error: it) }.join("; ")]
+                                                ])
+        }
+        //don't load scm status for api response
+        params['_no_scm']=true
+
+        def results = jobsFragment(query)
+
+        def clusterModeEnabled = frameworkService.isClusterModeEnabled()
+        def serverNodeUUID = frameworkService.serverUUID
+        def data = new JobInfoList(
+                results.nextScheduled.collect { ScheduledExecution se ->
+                    Map data = [:]
+                    if (clusterModeEnabled) {
+                        data = [
+                                serverNodeUUID: se.serverNodeUUID,
+                                serverOwner   : se.serverNodeUUID == serverNodeUUID
+                        ]
+                    }
+                    if(results.nextExecutions?.get(se.id)){
+                        data.nextScheduledExecution=results.nextExecutions?.get(se.id)
+                    }
+                    if (se.totalTime >= 0 && se.execCount > 0) {
+                        def long avg = Math.floor(se.totalTime / se.execCount)
+                        data.averageDuration = avg
+                    }
+                    JobInfo.from(
+                            se,
+                            apiService.apiHrefForJob(se),
+                            apiService.guiHrefForJob(se),
+                            data
+                    )
+                }
+        )
+        respond(
+                data,
+                [formats: [ 'json']]
+        )
+    }
+
+    def jobsFragment(ScheduledExecutionQuery query) {
         long start=System.currentTimeMillis()
         UserAndRolesAuthContext authContext
         def usedFilter=null
@@ -975,7 +1073,12 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         }
         [rundeckFramework: frameworkService.rundeckFramework]
     }
-    def securityConfig(){
+
+    def securityConfig() {
+        return redirect(action: 'acls', params: params)
+    }
+
+    def acls() {
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
 
         if (unauthorizedResponse(
@@ -989,8 +1092,27 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         Map<File,Validation> validation=list.collectEntries{
             [it,authorizationService.validateYamlPolicy(it)]
         }
+        def projectlist = []
+        if (params.project
+                && frameworkService.authorizeApplicationResourceAny(
+                authContext,
+                frameworkService.authResourceForProject(params.project),
+                [AuthConstants.ACTION_ADMIN]
+        )
+        ) {
+            def project = frameworkService.getFrameworkProject(params.project)
+            projectlist = project.listDirPaths('acls/').findAll { it ==~ /.*\.aclpolicy$/ }.collect {
+                it.replaceAll(/^acls\//, '')
+            }
+        }
 
-        [rundeckFramework: frameworkService.rundeckFramework,fwkConfigDir:fwkConfigDir, aclFileList: list, validations: validation]
+        [
+                rundeckFramework: frameworkService.rundeckFramework,
+                fwkConfigDir    : fwkConfigDir,
+                aclFileList     : list,
+                validations     : validation,
+                projectlist     : projectlist
+        ]
     }
 
     def systemInfo (){
@@ -1195,6 +1317,23 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
             it.value.description
         }.sort { a, b -> a.name <=> b.name }
 
+
+        def uiPluginProfiles = [:]
+        def loadedFileNameMap=[:]
+        pluginDescs.each { svc, list ->
+            list.each { desc ->
+                def provIdent = svc + ":" + desc.name
+                uiPluginProfiles[provIdent] = uiPluginService.getProfileFor(svc, desc.name)
+                def filename = uiPluginProfiles[provIdent].metadata?.filename
+                if(filename){
+                    if(!loadedFileNameMap[filename]){
+                        loadedFileNameMap[filename]=[]
+                    }
+                    loadedFileNameMap[filename]<< provIdent
+                }
+            }
+        }
+
         def defaultScopes=[
                 (framework.getNodeStepExecutorService().name) : PropertyScope.InstanceOnly,
                 (framework.getStepExecutionService().name) : PropertyScope.InstanceOnly,
@@ -1207,6 +1346,12 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 (framework.getResourceModelSourceService().name): framework.getResourceModelSourceService().getBundledProviderNames(),
                 (storagePluginProviderService.name): storagePluginProviderService.getBundledProviderNames()+['db'],
         ]
+        //list included plugins
+        def embeddedList = frameworkService.listEmbeddedPlugins(grailsApplication)
+        def embeddedFilenames=[]
+        if(embeddedList.success && embeddedList.pluginList){
+            embeddedFilenames=embeddedList.pluginList*.fileName
+        }
         def specialConfiguration=[
                 (storagePluginProviderService.name):[
                         description: message(code:"plugin.storage.provider.special.description"),
@@ -1239,19 +1384,54 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 descriptions        : pluginDescs,
                 serviceDefaultScopes: defaultScopes,
                 bundledPlugins      : bundledPlugins,
+                embeddedFilenames   : embeddedFilenames,
                 specialConfiguration: specialConfiguration,
-                specialScoping      : specialScoping
+                specialScoping      : specialScoping,
+                uiPluginProfiles    : uiPluginProfiles
         ]
     }
 
     def home() {
+        //first-run html info
+        def isFirstRun=false
+
+        if(configurationService.getBoolean("startup.detectFirstRun",true) &&
+                frameworkService.rundeckFramework.hasProperty('framework.var.dir')) {
+            def vardir = frameworkService.rundeckFramework.getProperty('framework.var.dir')
+            def vers = grailsApplication.metadata['build.ident'].replaceAll('\\s+\\(.+\\)$','')
+            def file = new File(vardir, ".first-run-${vers}")
+            if(!file.exists()){
+                isFirstRun=true
+                file.withWriter("UTF-8"){out->
+                    out.write('#'+(new Date().toString()))
+                }
+            }
+        }
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
         long start = System.currentTimeMillis()
         def fprojects = frameworkService.projectNames(authContext)
         session.frameworkProjects = fprojects
         log.debug("frameworkService.projectNames(context)... ${System.currentTimeMillis() - start}")
         def stats=cachedSummaryProjectStats(fprojects)
-        render(view: 'home', model: [projectNames: fprojects,execCount:stats.execCount,recentUsers:stats.recentUsers,recentProjects:stats.recentProjects])
+
+        render(view: 'home', model: [
+                isFirstRun:isFirstRun,
+                projectNames: fprojects,
+                execCount:stats.execCount,
+                totalFailedCount:stats.totalFailedCount,
+                recentUsers:stats.recentUsers,
+                recentProjects:stats.recentProjects
+        ])
+    }
+
+    def projectHome() {
+        if (!params.project) {
+            return redirect(controller: 'menu', action: 'home')
+        }
+        [project: params.project]
+    }
+
+    def welcome(){
     }
 
     private def cachedSummaryProjectStats(final List projectNames) {
@@ -1278,7 +1458,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         def summary=[:]
         def projects = []
         projectNames.each{project->
-            summary[project]=[name: project, execCount: 0, userSummary: [], userCount: 0]
+            summary[project]=[name: project, execCount: 0, failedCount: 0,userSummary: [], userCount: 0]
         }
         long proj2=System.currentTimeMillis()
         def projects2 = Execution.createCriteria().list {
@@ -1296,6 +1476,23 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                     summary[val[0].toString()].execCount = val[1]
                     projects << val[0]
                     execCount+=val[1]
+                }
+            }
+        }
+        def totalFailedCount= 0
+        def failedExecs = Execution.createCriteria().list {
+            gt('dateStarted', today)
+            inList('status', ['false', 'failed'])
+            projections {
+                groupProperty('project')
+                count()
+            }
+        }
+        failedExecs.each{val->
+            if(val.size()==2){
+                if(summary[val[0]]) {
+                    summary[val[0].toString()].failedCount = val[1]
+                    totalFailedCount+=val[1]
                 }
             }
         }
@@ -1321,7 +1518,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         }
 
         log.debug("loadSummaryProjectStats... ${System.currentTimeMillis()-start}, proj2 ${proj2}, proj3 ${proj3}")
-        [summary:summary,recentUsers:users,recentProjects:projects,execCount:execCount]
+        [summary:summary,recentUsers:users,recentProjects:projects,execCount:execCount,totalFailedCount:totalFailedCount]
     }
 
     def projectNamesAjax() {
@@ -1427,16 +1624,18 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         def projects=allsummary.recentProjects
         def users=allsummary.recentUsers
         def execCount=allsummary.execCount
+        def totalFailedCount=allsummary.totalFailedCount
 
         def fwkNode = framework.getFrameworkNodeName()
 
-        render(contentType:'application/json',text:
-                ( [
+        render(contentType: 'application/json', text:
+                ([
                         execCount        : execCount,
+                        totalFailedCount : totalFailedCount,
                         recentUsers      : users,
                         recentProjects   : projects,
                         frameworkNodeName: fwkNode
-                ] )as JSON
+                ]) as JSON
         )
     }
 
@@ -1666,6 +1865,11 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 return
             }
         }
+        if(null!=query.scheduleEnabledFilter || null!=query.executionEnabledFilter){
+            if (!apiService.requireVersion(request,response,ApiRequestFilters.V18)) {
+                return
+            }
+        }
 
         if (request.api_version < ApiRequestFilters.V14 && !(response.format in ['all','xml'])) {
             return apiService.renderErrorFormat(response,[
@@ -1687,11 +1891,111 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         respondApiJobsList(results.nextScheduled)
     }
 
+    /**
+     * API: get job info: /api/18/job/{id}/info
+     */
+    def apiJobDetail() {
+        if (!apiService.requireVersion(request, response, ApiRequestFilters.V18)) {
+            return
+        }
+
+        if (!apiService.requireParameters(params, response, ['id'])) {
+            return
+        }
+
+        def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID(params.id)
+
+        if (!apiService.requireExists(response, scheduledExecution, ['Job ID', params.id])) {
+            return
+        }
+        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
+                session.subject,
+                scheduledExecution.project
+        )
+        if (!frameworkService.authorizeProjectJobAll(
+                authContext,
+                scheduledExecution,
+                [AuthConstants.ACTION_READ],
+                scheduledExecution.project
+        )) {
+            return apiService.renderErrorXml(
+                    response,
+                    [
+                            status: HttpServletResponse.SC_FORBIDDEN,
+                            code  : 'api.error.item.unauthorized',
+                            args  : ['Read', 'Job ID', params.id]
+                    ]
+            )
+        }
+        if (!(response.format in ['all', 'xml', 'json'])) {
+            return apiService.renderErrorXml(
+                    response,
+                    [
+                            status: HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE,
+                            code  : 'api.error.item.unsupported-format',
+                            args  : [response.format]
+                    ]
+            )
+        }
+        def extra = [:]
+        def clusterModeEnabled = frameworkService.isClusterModeEnabled()
+        def serverNodeUUID = frameworkService.serverUUID
+        if (clusterModeEnabled && scheduledExecution.scheduled) {
+            extra.serverNodeUUID = scheduledExecution.serverNodeUUID
+            extra.serverOwner = scheduledExecution.serverNodeUUID == serverNodeUUID
+        }
+        if (scheduledExecution.totalTime >= 0 && scheduledExecution.execCount > 0) {
+            def long avg = Math.floor(scheduledExecution.totalTime / scheduledExecution.execCount)
+            extra.averageDuration = avg
+        }
+        if(scheduledExecution.shouldScheduleExecution()){
+            extra.nextScheduledExecution=scheduledExecutionService.nextExecutionTime(scheduledExecution)
+        }
+        respond(
+
+                JobInfo.from(
+                        scheduledExecution,
+                        apiService.apiHrefForJob(scheduledExecution),
+                        apiService.guiHrefForJob(scheduledExecution),
+                        extra
+                ),
+
+                [formats: ['xml', 'json']]
+        )
+    }
+
     private void respondApiJobsList(List<ScheduledExecution> results) {
         def clusterModeEnabled = frameworkService.isClusterModeEnabled()
         def serverNodeUUID = frameworkService.serverUUID
+
+        if (request.api_version >= ApiRequestFilters.V18) {
+            //new response format mechanism
+            //no <result> tag
+            def data = new JobInfoList(
+                    results.collect { ScheduledExecution se ->
+                        Map data = [:]
+                        if (clusterModeEnabled) {
+                            data = [
+                                    serverNodeUUID: se.serverNodeUUID,
+                                    serverOwner   : se.serverNodeUUID == serverNodeUUID
+                            ]
+                        }
+                        JobInfo.from(
+                                se,
+                                apiService.apiHrefForJob(se),
+                                apiService.guiHrefForJob(se),
+                                data
+                        )
+                    }
+            )
+            respond(
+                    data,
+                    [formats: ['xml', 'json']]
+            )
+            return
+        }
         withFormat {
-            xml {
+            def xmlresponse= {
                 return apiService.renderSuccessXml(request, response) {
                     delegate.'jobs'(count: results.size()) {
                         results.each { ScheduledExecution se ->
@@ -1716,6 +2020,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                     }
                 }
             }
+            xml xmlresponse
             json {
                 return apiService.renderSuccessJson(response) {
                     results.each { ScheduledExecution se ->
@@ -1739,6 +2044,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                     }
                 }
             }
+            '*' xmlresponse
         }
     }
     /**

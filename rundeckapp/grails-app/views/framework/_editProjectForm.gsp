@@ -1,11 +1,11 @@
 %{--
-  - Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
   -
   - Licensed under the Apache License, Version 2.0 (the "License");
   - you may not use this file except in compliance with the License.
   - You may obtain a copy of the License at
   -
-  -        http://www.apache.org/licenses/LICENSE-2.0
+  -     http://www.apache.org/licenses/LICENSE-2.0
   -
   - Unless required by applicable law or agreed to in writing, software
   - distributed under the License is distributed on an "AS IS" BASIS,
@@ -180,6 +180,8 @@
                          style="${wdgt.styleVisible(if: isSelected)}">
                         <div class="form-horizontal " >
                             <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                                    service:com.dtolabs.rundeck.plugins.ServiceNameConstants.NodeExecutor,
+                                    provider:description.name,
                                     properties:description.properties,
                                     report:nodeexecreport?.errors && isSelected ? nodeexecreport : null,
                                     prefix:nodeexecprefix,
@@ -229,6 +231,8 @@
                 <div class="form-horizontal " >
 
                     <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                            service:com.dtolabs.rundeck.plugins.ServiceNameConstants.FileCopier,
+                            provider:description.name,
                             properties:description.properties,
                             report:fcopyreport?.errors && isSelected ? fcopyreport : null,
                             prefix:fcopyprefix,

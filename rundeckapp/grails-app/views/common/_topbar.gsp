@@ -1,9 +1,25 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%@ page import="com.opensymphony.module.sitemesh.RequestConstants; com.dtolabs.rundeck.server.authorization.AuthConstants" %>
 <g:set var="selectParams" value="${[:]}"/>
 <g:if test="${pageScope._metaTabPage}">
     <g:set var="selectParams" value="${[page: _metaTabPage,project:params.project?:request.project]}"/>
 </g:if>
-<nav class="navbar navbar-default navbar-static-top" role="navigation">
+<nav class="navbar-overrides navbar navbar-default navbar-static-top" role="navigation">
 
     <div class="navbar-header">
         <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#bs-example-navbar-collapse-1">
@@ -12,7 +28,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
         </button>
-    <a href="${grailsApplication.config.rundeck.gui.titleLink ? enc(attr:grailsApplication.config.rundeck.gui.titleLink) : g.resource(dir: '/')}"
+    <a href="${grailsApplication.config.rundeck.gui.titleLink ? enc(attr:grailsApplication.config.rundeck.gui.titleLink) : g.createLink(uri: '/')}"
        title="Home" class="navbar-brand">
         <g:set var="appTitle"
                value="${grailsApplication.config.rundeck?.gui?.title ?: g.message(code: 'main.app.name',default:'')}"/>
@@ -68,12 +84,20 @@
         <g:else>
             <li id="projectSelect" class="dropdown disabled">
                 <a data-toggle="dropdown" href="#" class="disabled">
-                    <i class="glyphicon glyphicon-tasks"></i>
-                    <g:enc>${ params.project ?: request.project}</g:enc>
                     <i class="caret"></i>
                 </a>
             </li>
         </g:else>
+        <li id="projectHomeLink">
+            <a href="${createLink(
+                    controller: 'menu',
+                    action: 'projectHome',
+                    params: [project: project ?: params.project ?: request.project]
+            )}">
+                <i class="glyphicon glyphicon-tasks"></i>
+                <g:enc>${project ?: params.project ?: request.project ?: 'Choose ...'}</g:enc>
+            </a>
+        </li>
     </g:if>
 
         <g:set var="selectedclass" value="active"/>

@@ -1,17 +1,17 @@
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -235,13 +235,18 @@ public class DataContextUtils {
     }
 
     /**
-     * Merge one context onto another by adding or replacing values.
+     * Merge one context onto another by adding or replacing values in a new map
+     *
      * @param targetContext the target of the merge
-     *                @param newContext context to merge
-     * @return merged data
+     * @param newContext    context to merge
+     *
+     * @return merged data in a new map
      */
-    public static Map<String, Map<String, String>> merge(final Map<String, Map<String, String>> targetContext,
-                                                         final Map<String, Map<String, String>> newContext) {
+    public static Map<String, Map<String, String>> merge(
+            final Map<String, Map<String, String>> targetContext,
+            final Map<String, Map<String, String>> newContext
+    )
+    {
 
         final HashMap<String, Map<String, String>> result = deepCopy(targetContext);
         for (final Map.Entry<String, Map<String, String>> entry : newContext.entrySet()) {
@@ -438,7 +443,7 @@ public class DataContextUtils {
                 new InputStreamReader(
                         new FileInputStream
                                 (sourceFile)
-                ), toks, true, '@', '@'
+                ), toks, true, '@', '@', '\\'
         );
         final File temp;
         if (null != destination) {
@@ -499,18 +504,18 @@ public class DataContextUtils {
         if (null == script) {
             throw new NullPointerException("script cannot be null");
         }
-        if (null == framework) {
-            throw new NullPointerException("framework cannot be null");
-        }
         //use ReplaceTokens to replace tokens within the content
         final Reader read = new StringReader(script);
         final Map<String, String> toks = flattenDataContext(dataContext);
-        final ReplaceTokenReader replaceTokens = new ReplaceTokenReader(read, toks, true, '@', '@');
+        final ReplaceTokenReader replaceTokens = new ReplaceTokenReader(read, toks, true, '@', '@', '\\');
         final File temp;
         if (null != destination) {
             ScriptfileUtils.writeScriptFile(null, null, replaceTokens, style, destination);
             temp = destination;
         } else {
+            if (null == framework) {
+                throw new NullPointerException("framework cannot be null");
+            }
             temp = ScriptfileUtils.writeScriptTempfile(framework, replaceTokens, style);
         }
         ScriptfileUtils.setExecutePermissions(temp);
@@ -568,7 +573,8 @@ public class DataContextUtils {
                 toks,
                 true,
                 '@',
-                '@'
+                '@',
+                '\\'
         );
         final File temp;
         if (null != destination) {

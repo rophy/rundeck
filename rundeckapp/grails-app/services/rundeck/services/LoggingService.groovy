@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.services
 
 import com.dtolabs.rundeck.app.internal.logging.LogFlusher
@@ -25,6 +41,8 @@ import rundeck.services.logging.MultiLogWriter
 import rundeck.services.logging.NodeCountingLogWriter
 import rundeck.services.logging.ProducedExecutionFile
 import rundeck.services.logging.ThresholdLogWriter
+
+import java.nio.charset.Charset
 
 class LoggingService implements ExecutionFileProducer {
 
@@ -215,10 +233,11 @@ class LoggingService implements ExecutionFileProducer {
             StreamingLogWriter logWriter,
             LogLevel level,
             Contextual listener,
-            LogFlusher flusherWorkflowListener
+            LogFlusher flusherWorkflowListener,
+            Charset charset=null
     )
     {
-        def stream = new ThreadBoundLogOutputStream(logWriter, level, listener)
+        def stream = new ThreadBoundLogOutputStream(logWriter, level, listener, charset)
         flusherWorkflowListener.logOut=stream
         return stream
     }

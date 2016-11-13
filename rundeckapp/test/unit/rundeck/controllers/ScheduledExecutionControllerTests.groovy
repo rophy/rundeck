@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.rundeck.app.api.ApiBulkJobDeleteRequest
@@ -11,22 +27,6 @@ import com.dtolabs.rundeck.core.common.INodeSet
 import com.dtolabs.rundeck.core.common.NodeEntryImpl
 import com.dtolabs.rundeck.core.common.NodeSetImpl
 import com.dtolabs.rundeck.core.common.NodesSelector
-
-/*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 import grails.test.ControllerUnitTestCase
 import grails.test.mixin.Mock
@@ -174,16 +174,16 @@ class ScheduledExecutionControllerTests  {
         assertEquals 'xyz', controller.expandUrl(option, '${rundeck.serverUUID}', se)
     }
     public void testExpandUrlJobRundeckBasedir() {
-        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller,false)
         assertEquals '/a/path', controller.expandUrl(option, '${job.rundeck.basedir}', se,[:],false)
     }
 
     public void testExpandUrlJobRundeckBasedir2() {
-        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller,false)
         assertEquals '/a/path', controller.expandUrl(option, '${rundeck.basedir}', se,[:],false)
     }
 
-    protected List setupExpandUrlJob(def controller) {
+    protected List setupExpandUrlJob(def controller,boolean ishttp=true) {
         ScheduledExecution se = new ScheduledExecution(jobName: 'blue', groupPath: 'some/where',
                 description: 'a job', project: 'AProject', argString: '-a b -c d')
 
@@ -198,8 +198,13 @@ class ScheduledExecutionControllerTests  {
             getServerUUID(1..1) {->
                 'xyz'
             }
-            getRundeckBase(1..2){->
-                '/a/path'
+            if(!ishttp) {
+                getRundeckBase(1..2) { ->
+                    '/a/path'
+                }
+            }
+            getProjectGlobals(1..1){String x->
+                [:]
             }
         }
         [option, se]

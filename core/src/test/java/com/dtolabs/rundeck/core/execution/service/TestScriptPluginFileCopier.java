@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dtolabs.rundeck.core.execution.service;
 
 import com.dtolabs.rundeck.core.common.Framework;
@@ -59,6 +75,7 @@ public class TestScriptPluginFileCopier {
         private String name;
         private String service;
         private String scriptArgs;
+        private String[] scriptArgsArray;
         private String scriptInterpreter;
         private File archiveFile;
         private File contentsBasedir;
@@ -84,6 +101,11 @@ public class TestScriptPluginFileCopier {
 
         @Override public String getScriptArgs() {
             return scriptArgs;
+        }
+
+        @Override
+        public String[] getScriptArgsArray() {
+            return scriptArgsArray;
         }
 
         public void setScriptArgs(String scriptArgs) {
@@ -181,6 +203,19 @@ public class TestScriptPluginFileCopier {
                 boolean interpreterargsquoted,
                 String filepath
         ) {
+            Assert.fail("Unexpected");
+            return new String[0];
+        }
+
+        @Override
+        public String[] createScriptArgs(
+                final Map<String, Map<String, String>> localDataContext,
+                final String scriptargs,
+                final String[] scriptargsarr,
+                final String scriptinterpreter,
+                final boolean interpreterargsquoted
+        )
+        {
             Assert.fail("Unexpected");
             return new String[0];
         }
@@ -311,7 +346,9 @@ public class TestScriptPluginFileCopier {
         final File scriptFile = File.createTempFile("test-scriptfile", "tmp");
         scriptFile.deleteOnExit();
         testProvider.setScriptFile(scriptFile);
-        testProvider.setContentsBasedir(File.createTempFile("test-basedir", "tmp"));
+        final File baseDir = File.createTempFile("test-basedir", "tmp");
+        baseDir.deleteOnExit();
+        testProvider.setContentsBasedir(baseDir);
         testProvider.setMetadata(new HashMap<String, Object>());
         testProvider.setName("test-plugin");
         testProvider.setScriptArgs("");
@@ -385,7 +422,9 @@ public class TestScriptPluginFileCopier {
         final File scriptFile = File.createTempFile("test-scriptfile", "tmp");
         scriptFile.deleteOnExit();
         testProvider.setScriptFile(scriptFile);
-        testProvider.setContentsBasedir(File.createTempFile("test-basedir", "tmp"));
+        final File baseDir = File.createTempFile("test-basedir", "tmp");
+        baseDir.deleteOnExit();
+        testProvider.setContentsBasedir(baseDir);
         testProvider.setMetadata(new HashMap<String, Object>());
         testProvider.setName("test-plugin");
         testProvider.setScriptArgs("");
@@ -460,7 +499,9 @@ public class TestScriptPluginFileCopier {
         final File scriptFile = File.createTempFile("test-scriptfile", "tmp");
         scriptFile.deleteOnExit();
         testProvider.setScriptFile(scriptFile);
-        testProvider.setContentsBasedir(File.createTempFile("test-basedir", "tmp"));
+        final File baseDir = File.createTempFile("test-basedir", "tmp");
+        baseDir.deleteOnExit();
+        testProvider.setContentsBasedir(baseDir);
         testProvider.setMetadata(new HashMap<String, Object>());
         testProvider.setName("test-plugin");
         testProvider.setScriptArgs("");

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.rundeck.core.authentication.Group
@@ -33,6 +49,79 @@ class ProjectControllerSpec extends Specification{
     }
     def cleanup(){
 
+    }
+    @Unroll
+    def "api project create description #inputDesc"(){
+        given:
+        controller.projectService=Mock(ProjectService)
+        controller.apiService=Mock(ApiService)
+        controller.frameworkService=Mock(FrameworkService)
+        params.project='aproject'
+
+        request.method='POST'
+        request.format='json'
+        request.json=[name:'aproject',description:inputDesc]
+        when:
+
+        def result=controller.apiProjectCreate()
+
+        then:
+        1 * controller.apiService.requireVersion(_, _, 11) >> true
+        1 * controller.apiService.extractResponseFormat(*_) >> 'json'
+        1 * controller.apiService.parseJsonXmlWith(*_) >> { args ->
+            args[2].json.call(args[0].JSON)
+            true
+        }
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceTypeAll(*_)>>true
+        1 * controller.frameworkService.existsFrameworkProject('aproject')>>false
+        1 * controller.frameworkService.createFrameworkProject('aproject',{
+            it['project.description']==inputDesc
+        })>>[Mock(IRundeckProject){
+            getName()>>'aproject'
+        },[]]
+        1 * controller.frameworkService.loadProjectProperties(*_)>>([:] as Properties)
+        0 * controller.frameworkService._(*_)
+
+        where:
+        inputDesc       | _
+        'a description' | _
+        null            | _
+    }
+    @Unroll
+    def "api project create validate input json #inputJson"(){
+        given:
+        controller.projectService=Mock(ProjectService)
+        controller.apiService=Mock(ApiService)
+        controller.frameworkService=Mock(FrameworkService)
+        params.project='aproject'
+
+        request.method='POST'
+        request.format='json'
+        request.json=inputJson
+        when:
+
+        def result=controller.apiProjectCreate()
+
+        then:
+        1 * controller.apiService.requireVersion(_, _, 11) >> true
+        1 * controller.apiService.extractResponseFormat(*_) >> 'json'
+        1 * controller.apiService.parseJsonXmlWith(*_) >> { args ->
+            args[2].json.call(args[0].JSON)
+            true
+        }
+        1 * controller.apiService.renderErrorFormat(_, [status: 400, code:'api.error.invalid.request',args: [errMsg], format: 'json'])
+
+        1 * controller.frameworkService.getAuthContextForSubject(_)
+        1 * controller.frameworkService.authorizeApplicationResourceTypeAll(*_)>>true
+        0 * controller.frameworkService._(*_)
+
+        where:
+        inputJson                                              | errMsg
+        [name: 'aproject', description: 'xyz', config: 'blah'] | 'json: expected \'config\' to be a Map'
+        [name: 'aproject', description: 12]                    | 'json: expected \'description\' to be a String'
+        [name: [a: 'b'], description: null]                    | 'json: expected \'name\' to be a String'
+        [description: 'monkey']                                | 'json: required \'name\' but it was not found'
     }
 
     def "api export execution ids string"(){
@@ -596,6 +685,69 @@ class ProjectControllerSpec extends Specification{
         then:
         response.status==200
         response.contentType.split(';').contains('application/json')
+    }
+    def "project acls GET unsupported format"(){
+        setup:
+        controller.frameworkService=Mock(FrameworkService){
+            1 * existsFrameworkProject('test') >> true
+            1 * getAuthContextForSubject(_) >> null
+            1 * authResourceForProjectAcl('test') >> null
+            1 * authorizeApplicationResourceAny(_,_,[ACTION_READ,ACTION_ADMIN]) >> true
+            1 * getFrameworkProject('test') >> Mock(IRundeckProject){
+                1 * existsFileResource(_) >> true
+                0 * loadFileResource('acls/blah.aclpolicy',_) >> {args->
+                    args[1].write('blah'.bytes)
+                    4
+                }
+            }
+        }
+        controller.apiService=Mock(ApiService){
+            1 * requireVersion(_,_,14) >> true
+            1 * requireVersion(_,_,11) >> true
+            1 * extractResponseFormat(_,_,_,_) >> {it[3]}
+            1 * renderErrorFormat(_,[status:406,code:'api.error.resource.format.unsupported',args:['jambajuice']])>>{it[0].status=it[1].status}
+            0 * _(*_)
+        }
+        when:
+        params.path='blah.aclpolicy'
+        params.project="test"
+        response.format='jambajuice'
+        def result=controller.apiProjectAcls()
+
+        then:
+        response.status==406
+    }
+    def "project acls GET default format"(){
+        setup:
+        controller.frameworkService=Mock(FrameworkService){
+            1 * existsFrameworkProject('test') >> true
+            1 * getAuthContextForSubject(_) >> null
+            1 * authResourceForProjectAcl('test') >> null
+            1 * authorizeApplicationResourceAny(_,_,[ACTION_READ,ACTION_ADMIN]) >> true
+            1 * getFrameworkProject('test') >> Mock(IRundeckProject){
+                1 * existsFileResource(_) >> true
+                1 * loadFileResource('acls/blah.aclpolicy',_) >> {args->
+                    args[1].write('blah'.bytes)
+                    4
+                }
+            }
+        }
+        controller.apiService=Mock(ApiService){
+            1 * requireVersion(_,_,14) >> true
+            1 * requireVersion(_,_,11) >> true
+            1 * extractResponseFormat(_,_,_,_) >> {it[3]}
+            1 * renderWrappedFileContents('blah','json',_) >> {args-> args[2].success=true}
+            0 * _(*_)
+        }
+        when:
+        params.path='blah.aclpolicy'
+        params.project="test"
+        def result=controller.apiProjectAcls()
+
+        then:
+        response.status==200
+        response.contentType.split(';').contains('application/json')
+        response.json.success==true
     }
     def "project acls GET xml"(){
         setup:

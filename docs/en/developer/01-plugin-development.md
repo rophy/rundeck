@@ -24,10 +24,13 @@ and must have a `@Plugin` annotation to define it's service type and provider na
 The `.jar` file you distribute must have this metadata within the main Manifest
 for the jar file to be correctly loaded by the system:
 
-* `Rundeck-Plugin-Version: 1.1`
+* `Rundeck-Plugin-Version: 1.2`
 * `Rundeck-Plugin-Archive: true`
 * `Rundeck-Plugin-Classnames: classname,..`
 * `Rundeck-Plugin-Libs: lib/something.jar ...` *(optional)*
+* `Rundeck-Plugin-Author: Author name` *(optional)*
+* `Rundeck-Plugin-URL: Website URL` *(optional)*
+* `Rundeck-Plugin-Date: Publication date` *(optional)* in ISO8601 format
 
 Additionally, you should include a manifest entry to indicate the plugin file's version:
 
@@ -35,6 +38,10 @@ Additionally, you should include a manifest entry to indicate the plugin file's 
 
 This version number will be used to load only the newest plugin file, if more than one provider of
 the same name and type is defined.
+
+### Plugin Version
+
+`Rundeck-Plugin-Version` indicates the plugin mechanism version
 
 ### Build dependencies
 
@@ -248,6 +255,14 @@ For more information see the options under [Property Rendering options](#propert
 
 A set of constants for the supported rendering option keys and some values are provided in the [StringRenderingConstants](../javadoc/com/dtolabs/rundeck/core/plugins/configuration/StringRenderingConstants.html).
 
+### Internationalization/Localization for Jar files
+
+Since Rundeck 2.6.10, Plugins support Internationalization ("i18n") using Java properties files.
+
+Include a `resources/i18n` directory in your jar file, with localized versions of your Plugin messages.
+
+See [Plugin Localization][].
+
 ## Script Plugin Development
 
 Script plugins can provide the same services as Java plugins, but they do so
@@ -297,9 +312,10 @@ The file `plugin.yaml` must have this structure:
  
 name: plugin name
 version: plugin version
-rundeckPluginVersion: 1.1
+rundeckPluginVersion: 1.2
 author: author name
-date: release date
+date: release date (ISO8601)
+url: website URL
 providers:
     - name: provider
       service: service name
@@ -313,13 +329,14 @@ The main metadata that is required:
 
 * `name` - name for the plugin
 * `version` - version number of the plugin
-* `rundeckPluginVersion` - Rundeck Plugin type version, currently "1.1"
+* `rundeckPluginVersion` - Rundeck Plugin type version, currently "1.2"
 * `providers` - list of provider metadata maps
 
 These are optional:
 
 * `author` - optional author info
-* `date` - optional release date info
+* `date` - optional release date info in ISO8601 format
+* `url` - optional website URL
 
 This provides the necessary metadata about the plugin, including one or more 
 entries in the `providers` list to declare those providers defined in the plugin.
@@ -328,6 +345,8 @@ entries in the `providers` list to declare those providers defined in the plugin
 
 The value of `rundeckPluginVersion` defines some features of the loaded plugin.
 
+* `1.2` 
+    * allows use of [Plugin Localization][] with message resources and [Plugin Icons][].
 * `1.1` 
     * uses a default of `true` for `mergeEnvironment` (see below)
 * `1.0` first release
@@ -349,7 +368,8 @@ Required provider entries:
 
 For `ResourceModelSource` service, this additional entry is required:
 
-* `resource-format` - Must be the name of one of the supported [Resource Model Document Formats].
+* `resource-format` - Must be the name of one of the supported 
+[Resource Model Document Formats](../plugins-user-guide/resource-model-source-plugins.html#resource-model-document-formats).
 
 Optional entries:
 
@@ -362,6 +382,12 @@ Optional entries:
      `${interpreter} "${file} ${arg1} ${arg2}..."`. If false,
     the execution will be done by passing the file and args as separate arguments:
      `${interpreter} ${file} ${arg1} ${arg2}...`
+
+* `use-original-extension`: (`true/false`, default `true`), whether to force the 
+  remotely copied script to have the same file extension as the original specified by `script-file`.
+  (Available for `RemoteScriptNodeStep` only.)
+* `script-file-extension`: A file extension to use for the remotely copied script.
+  (Available for `RemoteScriptNodeStep` only.)
 * `mergeEnvironment` - boolean, if true (default for `rundeckPluginVersion: 1.1+`), when the script
   is executed the Environment variables from the Rundeck server
   will be merged with the context environment variables provided to the script.
@@ -516,6 +542,14 @@ For `ResourceModelSource`
 
 :   All output on `STDOUT` will be captured and passed to a `ResourceFormatParser` for the specified `resource-format` to create the Node definitions.
 
+### Internationalization/Localization for Zip files
+
+Since Rundeck 2.6.10, Plugins support Internationalization ("i18n") using Java properties files.
+
+Include a `resources/i18n` directory in your zip file, with localized versions of your Plugin messages.
+
+See [Plugin Localization][].
+
 ## Property scopes
 
 The `scope` determines how the value of the property is resolved.
@@ -587,6 +621,7 @@ Available rendering option keys:
 * `displayType`, values:
     - `SINGLE_LINE` - display input as a single text field.
     - `MULTI_LINE` - display input as a multi-line text area.
+    - `CODE` - display input as a multi-line text area with syntax highlighting
     - `PASSWORD` - display input as a password field
     - `STATIC_TEXT` - display static text without an input field, using the default value as the text
 * `instance-scope-node-attribute`
@@ -613,3 +648,113 @@ Available rendering option keys:
   * `grouping` allowed value: `secondary`, indicates that the specified `groupName` should be shown in a
   collapsed state if no input values in that group have been set. If no `groupName` is set, then the field
   will be displayed under a group with a heading of "More".
+  * `codeSyntaxMode` - if displayType is `CODE`, name of a [ACE editor mode][acejs] supported by Rundeck. One of: `batchfile`, `diff`, `dockerfile`, `golang`, `groovy`, `html`, `java`, `javscript`, `json`, `markdown`, `perl`, `php`, `powershell`, `properties`, `python`, `ruby`, `sh`, `sql`, `xml`, `yaml`.
+  * `codeSyntaxSelectable` - if displayType is `CODE`, `true/false`: if true, show a select box for choosing from the available syntax highlighting modes.
+
+  [acejs]: https://ace.c9.io
+
+## Plugin Localization
+
+Since Rundeck Plugin Version 1.2 (Rundeck 2.6.10), Plugins support Internationalization ("i18n") using Java properties files.
+
+Specify `rundeckPluginVersion: 1.2` in your plugin.yaml (script plugins) or `Rundeck-Plugin-Version: 1.2` in your
+jar Manifest (jar plugins) to enable Localization support.
+
+Include a `resources/i18n` directory in your jar/zip file, with localized versions of your Plugin messages.
+
+
+### Resolving Localization Message Files
+
+The mechanism for looking up the appropriate localization messages file is similar to the Spring Java library mechanism.
+
+* `resources/i18n/messages.properties` The default messages for the plugin provider(s).  This file will be loaded if
+no other more specific messages file is found.
+
+When loading messages for a locale/language, this search order will be used,:
+
+1. `resources/i18n/messages_LANG_COUNTRY.properties` for requested Locale
+2. `resources/i18n/messages_LANG.properties` for requested Locale
+3. `resources/i18n/messages_LANG_COUNTRY.properties` for Default Locale for the JVM
+4. `resources/i18n/messages_LANG.properties` for Default Locale for the JVM
+5. `resources/i18n/messages.properties` as fallback
+
+In addition, specific messages files can be created for each Provider defined in your plugin file.
+
+
+1. `resources/i18n/SERVICE.PROVIDER.messages.properties` for requested Plugin Service and Provider names.
+1. `resources/i18n/PROVIDER.messages.properties` for requested Provider name.
+1. `resources/i18n/SERVICE.messages.properties` for requested Service name.
+1. `resources/i18n/messages.properties` as fallback
+
+If you have multiple Providers in your plugin file, can use separate messages files for each provider.
+
+You can combine the Locale and Service/Provider:
+
+* `resources/i18n/SERVICE.PROVIDER.messages_LANG_COUNTRY.properties` 
+
+Here is an example:
+
+`resources/i18n/WorkflowNodeStep.flow-control.messages_es_419.properties`
+
+### Defining Plugin Localization Messages
+
+When displaying a plugin in the GUI, Rundeck will look for localized versions of text for the plugin, using the 
+localization messages if they are found. If they are not found, it will use the text
+versions defined in the Plugin Description (Java annotations or plugin.yaml file).
+
+The `messages.properties` file is a [Java Properties Format](https://docs.oracle.com/javase/7/docs/api/java/util/Properties.html#load(java.io.Reader)) in `UTF-8` encoding.
+
+The following message Codes will be used:
+
+* `plugin.title` Plugin Title 
+* `plugin.description` Plugin Description
+* `property.NAME.title` Title for configuration property named "NAME"
+* `property.NAME.description` Description for configuration property named "NAME"
+
+(*Note*: SCM Plugins have additional message codes.  See: [SCM Plugins - Localization][]).
+
+[SCM Plugins - Localization]: scm-plugins.html#localization
+
+Additionally, if a property has a [Property Rendering Option](#property-rendering-options) marking it as `STATIC_TEXT`
+normally the `defaultValue` of the property is used to render it as text or HTML.  This value can be localized as well:
+
+* `plugin.NAME.defaultValue` Static text/html for a STATIC_TEXT property named "NAME"
+
+The message code will be resolved using the following search pattern using the Service and Provider names:
+
+1. `SERVICE.PROVIDER.CODE`
+2. `PROVIDER.CODE`
+3. `SERVICE.CODE`
+4. `CODE`
+
+Where `CODE` is one of the messages codes mentioned above.
+
+So for example you could define the titles of two different providers using this file:
+
+`messages.properties`
+
+~~~ {.properties}
+provider1.plugin.title=My Provider 1
+provider2.plugin.title=My Provider 2
+~~~
+
+## Plugin Icons
+
+Since Rundeck Plugin Version 1.2 (Rundeck 2.6.10), Custom Icons can now be defined for your plugin.
+
+Specify `rundeckPluginVersion: 1.2` in your plugin.yaml (script plugins) or `Rundeck-Plugin-Version: 1.2` in your
+jar Manifest (jar plugins) to enable custom icon support.
+
+Include a `resources/` directory in your jar/zip file with your icon file.  The icon is resolved by looking for
+a file in the resources directory using the following search pattern:
+
+1. `resources/SERVICE.PROVIDER.icon.png`
+1. `resources/PROVIDER.icon.png`
+1. `resources/SERVICE.icon.png`
+1. `resources/icon.png`
+
+You can define a custom icon for each Provider in your plugin file, or a single icon for all providers.
+
+
+[Plugin Localization]: #plugin-localization
+[Plugin Icons]: #plugin-icons

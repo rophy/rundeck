@@ -1,4 +1,20 @@
-<%@ page import="rundeck.Execution; com.dtolabs.rundeck.server.authorization.AuthConstants" %>
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
+<%@ page import="rundeck.ScheduledExecution; rundeck.Execution; com.dtolabs.rundeck.server.authorization.AuthConstants" %>
 
 <g:set var="ukey" value="${g.rkey()}"/>
         <div class="jobslist ${small?'small':''}">
@@ -29,7 +45,11 @@
                         %{-- select job view --}%
                         <g:if test="${jobsjscallback}">
                             <tr class=" expandComponentHolder expanded" id="jobrow_${scheduledExecution.id}">
-                               <td class="jobname" style="overflow:hidden; text-overflow: ellipsis; white-space: nowrap; overflow-x: hidden">
+                               <td class="jobname"
+                                   data-job-id="${scheduledExecution.extid}"
+                                   data-job-name="${scheduledExecution.jobName}"
+                                   data-job-group="${scheduledExecution.groupPath}"
+                                   style="overflow:hidden; text-overflow: ellipsis; white-space: nowrap; overflow-x: hidden">
                                        <g:set var="jstext" value="jobChosen('${enc(js: scheduledExecution.jobName)}','${enc(js: scheduledExecution.groupPath)}')"/>
                                        <span class="textbtn textbtn-success" title="Choose this job" onclick="${enc(attr:jstext)}">
                                            <i class="glyphicon glyphicon-book"></i>
@@ -44,7 +64,11 @@
                         <g:else>
                             %{--normal view--}%
                         <tr class="sectionhead expandComponentHolder ${paginateParams?.idlist==scheduledExecution.id.toString()?'expanded':''}" id="jobrow_${scheduledExecution.id}">
-                            <td class="jobname">
+                            <td class="jobname"
+                                data-job-id="${scheduledExecution.extid}"
+                                data-job-name="${scheduledExecution.jobName}"
+                                data-job-group="${scheduledExecution.groupPath}"
+                            >
                                 <span class="jobbulkeditfield" style="display: none" data-bind="visible: enabled">
                                 <input type="checkbox"
                                        name="ids"
@@ -119,7 +143,13 @@
                                 </div>
 
                                 <g:render template="/scheduledExecution/description"
-                                          model="[description: scheduledExecution?.description,textCss:'text-muted',mode:'collapsed',rkey:g.rkey()]"/>
+                                          model="[description: scheduledExecution?.description,
+                                                  textCss:'text-muted',
+                                                  mode:'collapsed',
+                                                  rkey:g.rkey(),
+                                                  jobLinkId:scheduledExecution?.extid,
+                                                  cutoffMarker: ScheduledExecution.RUNBOOK_MARKER
+                                          ]"/>
 
                             </td>
                             <g:if test="${scheduledExecution.scheduled}">

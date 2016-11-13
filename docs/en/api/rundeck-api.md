@@ -55,6 +55,20 @@ View the [Index](#index) listing API paths.
 
 Changes introduced by API Version number:
 
+**Version 18**:
+
+* New Endpoints.
+    - [`GET /api/18/job/[ID]/info`][/api/V/job/[ID]/info] - Get metadata about a Job: Project name and scheduling info.
+* Updated Endpoints:       
+    - [`/api/18/job/[ID]/run`][/api/V/job/[ID]/run]       
+        - new `runAtTime` parameter to run once at a certain time.
+        - Job options can now be specified separately outside of the `argString`. Use `option.NAME=value` parameters,
+       or specify `options` entry in JSON body.
+* Updated responses for Executions
+    - Executions results include custom status strings.
+    - Documented `timedout`,`failed-with-retry`, and `scheduled` status values.
+    - See [Listing Running Executions](#listing-running-executions)
+
 **Version 17**:
 
 * New Endpoints.
@@ -215,7 +229,6 @@ In this version, all new and updated endpoints support XML or JSON request and r
 - For API clients that expect to see the `<result>` element, a request header of `X-Rundeck-API-XML-Response-Wrapper: true` will restore it.
 - For endpoint requests for API version 10 and earlier, the `<result>` element will be sent as it has been (described in [Response Format][])
 
-[Response Format]: #response-format
 
 **Version 11**:
 
@@ -1762,6 +1775,13 @@ Optional parameters:
 * `asUser` : specifies a username identifying the user who ran the job. Requires `runAs` permission.
 * Node filter parameters as described under [Using Node Filters](#using-node-filters)
 * `filter` can be a node filter string.
+* `runAtTime`: Specify a time to run the job (**API v18** or later).
+* `option.OPTNAME`: Option value for option named `OPTNAME`. If any `option.OPTNAME` parameters are specified,
+    the `argString` value is ignored (**API v18** or later).
+
+`runAtTime`
+:    This is a ISO-8601 date and time stamp with timezone, with optional milliseconds.,
+        e.g. `2016-11-23T12:20:55-0800` or `2016-11-23T12:20:55.123-0800`
 
 (**API v14**) If the request has `Content-Type: application/json`, then the parameters will be ignored,
 and this format is expected in the content:
@@ -1771,9 +1791,16 @@ and this format is expected in the content:
     "argString":"...",
     "loglevel":"...",
     "asUser":"...",
-    "filter":"..."
+    "filter":"...",
+    "runAtTime":"...",
+    "options": {
+        "myopt1":"value",
+        ...
+    }
 }
 ~~~~~
+
+(**API v18** or later): The `options` entry can contain a map of option name -> value, in which case the `argString` is ignored.
 
 
 **Response**:
@@ -1806,7 +1833,7 @@ If you specify `format=xml`, then the output will be in [job-xml](../man5/job-xm
 
 If you specify `format=yaml`, then the output will be in [job-yaml](../man5/job-yaml.html) format.
 
-If an error occurs, then the output will be in XML format, using the common `result` element described in the [Response Format](#response-format) section.
+If an error occurs, then the output will be in XML format, using the common `result` element described in the [Response Format][] section.
 
 ### Importing Jobs ###
 
@@ -1830,7 +1857,8 @@ One of the following:
 
 Optional parameters:
 
-* `format` : can be "xml" or "yaml" to specify the input format, if multipart of form input is sent. Default is "xml"
+* `fileformat` : can be "xml" or "yaml" to specify the input format, if multipart of form input is sent. Default is "xml"
+    * (deprecated: `format` can be used as well, but this will also force the response format to be XML.)
 * `dupeOption`: A value to indicate the behavior when importing jobs which already exist.  Value can be "skip", "create", or "update". Default is "create".
 * `uuidOption`: Whether to preserve or remove UUIDs from the imported jobs. Allowed values (**since V9**):
     *  `preserve`: Preserve the UUIDs in imported jobs.  This may cause the import to fail if the UUID is already used. (Default value).
@@ -1916,7 +1944,7 @@ If you specify `format=xml`, then the output will be in [job-xml](../man5/job-xm
 
 If you specify `format=yaml`, then the output will be in [job-yaml](../man5/job-yaml.html) format.
 
-If an error occurs, then the output will be in XML format, using the common `result` element described in the [Response Format](#response-format) section.
+If an error occurs, then the output will be in XML format, using the common `result` element described in the [Response Format][] section.
 
 ### Deleting a Job Definition ###
 
@@ -1962,7 +1990,7 @@ Note: you can combine `ids` with `idlist`
 
 `application/xml` response:
 
-The common `result` element described in the [Response Format](#response-format) section, indicating success or failure and any messages.
+The common `result` element described in the [Response Format][] section, indicating success or failure and any messages.
 
 If successful, then the `result` will contain a `deleteJobs` element with two sections of results, `succeeded` and `failed`:
 
@@ -2277,6 +2305,49 @@ The list of succeeded/failed will contain objects of this form:
 }
 ~~~~~~
 
+### Get Job Metadata
+
+Get metadata about a specific job.
+
+**Request:**
+
+    GET /api/18/job/[ID]/info
+
+**Response:**
+
+`Content-Type: application/xml`: A single `job` element in the same format as [Listing Jobs](#listing-jobs):
+
+~~~~~~~~~~ {.xml}
+<job id="ID" href="[API url]" permalink="[GUI URL]" scheduled="true/false" scheduleEnabled="true/false"
+   enabled="true/false" averageDuration="[ms]"
+   >
+    <name>Job Name</name>
+    <group>Job Name</group>
+    <project>Project Name</project>
+    <description>...</description>
+</job>
+~~~~~~~~~~~~
+
+`Content-Type: application/json`
+
+A single object:
+
+~~~~~~~~~~ {.json}
+{
+    "id": "[UUID]",
+    "name": "[name]",
+    "group": "[group]",
+    "project": "[project]",
+    "description": "...",
+    "href": "[API url]",
+    "permalink": "[GUI url]",
+    "scheduled": true/false,
+    "scheduleEnabled": true/false,
+    "enabled": true/false,
+    "averageDuration": long (milliseconds)
+}
+~~~~~~~~~~~~
+
 ## Executions
 
 ### Getting Executions for a Job
@@ -2344,6 +2415,7 @@ Each `execution` of the form:
 <execution id="[ID]" href="[url]" permalink="[url]" status="[status]" project="[project]">
     <user>[user]</user>
     <date-started unixtime="[unixtime]">[datetime]</date-started>
+    <customStatus>[string]</customStatus>
 
     <!-- optional job context if the execution is associated with a job -->
     <job id="jobID" averageDuration="[milliseconds]" href="[API url]" permalink="[GUI url]">
@@ -2408,6 +2480,7 @@ It contains a `paging` entry with paging information, and a `executions` array:
       "href": "[API url]",
       "permalink": "[GUI url]",
       "status": "[status]",
+      "customStatus": "[string]",
       "project": "test",
       "user": "[user]",
       "serverUUID":"[UUID]",
@@ -2451,6 +2524,12 @@ The `[status]` value indicates the execution status.  It is one of:
 * `succeeded`: execution completed successfully
 * `failed`: execution completed with failure
 * `aborted`: execution was aborted
+* `timedout`: execution timed out
+* `failed-with-retry`: execution failed and will retry
+* `scheduled`: execution is scheduled to run in the future
+* `other`: execution had a custom exit status string
+
+If `status` is `other`, then, `customStatus` will contain the exit status.
 
 The `[url]` value for the `href` is a URL the Rundeck API for the execution.
 The `[url]` value for the `permalink` is a URL to the Rundeck server page to view the execution output.
@@ -3171,7 +3250,7 @@ E.g.:
 The result will contain a set of data values reflecting the execution's status, as well as the status and read location in the output file.
 
 * In JSON, there will be an object containing these entries.
-* In XML, within the standard [Response Format](#response-format) `result` there will be an `output` element, containing these sub-elements, each with a text value.
+* In XML, within the standard [Response Format][] `result` there will be an `output` element, containing these sub-elements, each with a text value.
 
 Entries:
 
@@ -4091,7 +4170,7 @@ Resource Model definition in [resource-xml](../man5/resource-xml.html) or [resou
 
 **Since API version 3**: You can also POST data using a content type supported by a Resource Format Parser plugin.  This requires using API version `3`.
 
-POST Result: A success or failure API response. (See [Response Format](#response-format)).
+POST Result: A success or failure API response. (See [Response Format][]).
 
 Example POST request:
 
@@ -5337,6 +5416,10 @@ Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-projec
 
 * `POST` [Disable Executions for a Job](#disable-executions-for-a-job)
 
+[/api/V/job/[ID]/info][]
+
+* `GET` [Get Job Metadata](#get-job-metadata)
+
 [/api/V/job/[ID]/run][]
 
 * `POST` [Running a Job](#running-a-job)
@@ -5574,6 +5657,8 @@ Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-projec
 * `DELETE` [Delete a token](#delete-a-token)
 
 
+[Response Format]:#xml-response-format
+
 
 [/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugins]:#list-scm-plugins
 [/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input]:#get-scm-plugin-input-fields
@@ -5621,6 +5706,8 @@ Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-projec
 [POST /api/V/job/[ID]/executions]:#running-a-job
 [DELETE /api/V/job/[ID]/executions]:#delete-all-executions-for-a-job
 
+[/api/V/job/[ID]/info]:#get-job-metadata
+[GET /api/V/job/[ID]/info]:#get-job-metadata
 
 [/api/V/job/[ID]/schedule/enable]:#enable-scheduling-for-a-job
 

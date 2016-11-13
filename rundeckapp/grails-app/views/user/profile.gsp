@@ -2,7 +2,23 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="layout" content="base"/>
-    <title><g:appTitle/> - <g:message code="userController.page.profile.title" />: ${user.login}</title>
+    <title>%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
+<g:appTitle/> - <g:message code="userController.page.profile.title" />: ${user.login}</title>
     <g:javascript library="prototype/effects"/>
     <g:javascript>
     function addTokenRow(elem,login,token){
@@ -75,6 +91,15 @@
     function highlightNew(elem){
         jQuery(' .apitokenform.newtoken').fadeTo('slow',1);
     }
+    function changeLanguage() {
+        var url = '${g.createLink(controller: 'user', action: 'profile')}';
+        window.location.href = url + "?lang="+jQuery("#language").val();
+    }
+    function setLanguage() {
+        //grails stores current locale in http session under below key
+        var selectedLanguage = '${session[org.springframework.web.servlet.i18n.SessionLocaleResolver.LOCALE_SESSION_ATTRIBUTE_NAME]}';
+        jQuery("#language").val(selectedLanguage);
+    }
     </g:javascript>
 </head>
 <body>
@@ -100,6 +125,15 @@
         <div class="help-block">
             <g:message code="userController.page.profile.description" />
         </div>
+    </div>
+    <div class="col-sm-12">
+        <span class="pull-right">
+           	<label for="language"><g:message code="user.profile.language.label" /></label>
+            <select name="language" id="language" onchange="changeLanguage();">
+                <option value="">English</option>
+                <option value="es_419">Español</option>
+            </select>
+        </span>
     </div>
 </div>
 

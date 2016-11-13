@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.client.utils.Constants
@@ -204,22 +220,27 @@ class ExecutionController extends ControllerBase{
         eprev = result ? result[0] : null
         //load plugins for WF steps
         def pluginDescs=[node:[:],workflow:[:]]
-        e.workflow.commands.findAll{it.instanceOf(PluginStep)}.each{PluginStep step->
-            if(!pluginDescs[step.nodeStep?'node':'workflow'][step.type]){
-                def description = frameworkService.getPluginDescriptionForItem(step)
-                if (description) {
-                    pluginDescs[step.nodeStep ? 'node' : 'workflow'][step.type]=description
-                }
-            }
+
+        frameworkService.getNodeStepPluginDescriptions().each{desc->
+            pluginDescs['node'][desc.name]=desc
         }
-//        def state = workflowService.readWorkflowStateForExecution(e)
-//        if(!state){
-////            state= workflowService.previewWorkflowStateForExecution(e)
-//        }
-        return [scheduledExecution: e.scheduledExecution?:null,execution:e, filesize:filesize,
-                nextExecution: e.scheduledExecution?.scheduled ? scheduledExecutionService.nextExecutionTime(e.scheduledExecution) : null,
-                orchestratorPlugins: orchestratorPluginService.listOrchestratorPlugins(),
-                enext: enext, eprev: eprev,stepPluginDescriptions: pluginDescs, ]
+        frameworkService.getStepPluginDescriptions().each{desc->
+            pluginDescs['workflow'][desc.name]=desc
+        }
+        def workflowTree = scheduledExecutionService.getWorkflowDescriptionTree(e.project, e.workflow, 0)
+        return [
+                scheduledExecution    : e.scheduledExecution ?: null,
+                execution             : e,
+                workflowTree          : workflowTree,
+                filesize              : filesize,
+                nextExecution         : e.scheduledExecution?.scheduled ? scheduledExecutionService.nextExecutionTime(
+                        e.scheduledExecution
+                ) : null,
+                orchestratorPlugins   : orchestratorPluginService.listOrchestratorPlugins(),
+                enext                 : enext,
+                eprev                 : eprev,
+                stepPluginDescriptions: pluginDescs,
+        ]
     }
     def delete = {
         withForm{
@@ -627,7 +648,7 @@ class ExecutionController extends ControllerBase{
                 return
             }
             def message = msgbuf.message
-            def msghtml=message
+            def msghtml=message.encodeAsHTML()
             if (message.contains('\033[')) {
                 try {
                     msghtml = message.decodeAnsiColor()

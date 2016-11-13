@@ -1,3 +1,19 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%--
   Created by IntelliJ IDEA.
   User: greg
@@ -31,14 +47,22 @@
                 method="post" class="form form-horizontal">
             <g:hiddenField name="allJobs" value="${params.allJobs}"/>
             <g:hiddenField name="actionId" value="${params.actionId}"/>
+            <g:set var="serviceName" value="${integration=='export'?'ScmExport':'ScmImport'}"/>
             <div class="panel panel-primary" id="createform">
                 <div class="panel-heading">
                     <span class="h3">
-                        <g:if test="${pluginDescription && pluginDescription.description?.title}">
-                            ${pluginDescription.description.title}:
-                        </g:if>
+
+                        <stepplugin:message
+                                service="${serviceName}"
+                                name="${pluginDescription.name}"
+                                code="plugin.title"
+                                default="${pluginDescription.description?.title?:pluginDescription.name}"/>:
                         <g:if test="${actionView && actionView.title}">
-                            ${actionView.title}
+                            <stepplugin:message
+                                    service="${serviceName}"
+                                    name="${pluginDescription.name}"
+                                    code="action.${actionId}.title"
+                                    default="${actionView.title}"/>
                         </g:if>
                         <g:else>
                             <g:message code="scmController.page.commit.description" default="SCM Export"/>
@@ -50,7 +74,11 @@
                     <g:if test="${actionView && actionView.description}">
                         <div class="list-group-item">
                             <div class="list-group-item-text">
-                                <g:markdown>${actionView.description}</g:markdown>
+                                <g:markdown><stepplugin:message
+                                        service="${serviceName}"
+                                        name="${pluginDescription.name}"
+                                        code="action.${actionId}.description"
+                                        default="${actionView.description}"/></g:markdown>
                             </div>
                         </div>
                     </g:if>
@@ -172,11 +200,11 @@
                                                 }"/>
 
                                                 <g:render template="statusIcon"
-                                                          model="[iscommit: true, status: 'DELETED', notext: true,
-                                                                                                     integration:'export', text: '',]"/>
+                                                          model="[iscommit: true, exportStatus: 'DELETED', notext: true,
+                                                                                                     text: '',]"/>
                                                 <g:render template="statusIcon"
-                                                          model="[iscommit: true, status: 'DELETED', noicon: true,
-                                                                                                     integration:'export', text: deletedJobText]"/>
+                                                          model="[iscommit: true, exportStatus: 'DELETED', noicon: true,
+                                                                                                     text: deletedJobText]"/>
 
                                             </label>
                                         </div>
@@ -209,7 +237,7 @@
                         </g:if>
                         <g:if test="${!jobs && !deletedPaths && scmProjectStatus.state.toString() == 'CLEAN'}">
                             <div class="list-group-item">
-                                No Changes
+                                <g:message code="no.changes" />
                             </div>
                         </g:if>
                     </g:if>
@@ -304,6 +332,9 @@
                     <div class="list-group-item">
                         <g:if test="${actionView?.properties}">
                             <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                                    service:serviceName,
+                                    provider:pluginDescription.name,
+                                    messagePrefix:"action.${actionId}.",
                                     properties:actionView?.properties,
                                     report:report,
                                     values:config,
@@ -320,8 +351,8 @@
                             code="button.action.Cancel"/></button>
                     <g:submitButton
                             name="submit"
-                            value="${actionView.buttonTitle ?:
-                                    g.message(code: 'button.Export.title')}"
+                            value="${stepplugin.messageText(service:serviceName,name:pluginDescription.name,code:'action.'+actionId+'.buttonTitle',default:actionView.buttonTitle ?:
+                                    g.message(code: 'button.Export.title'))}"
                             class="btn btn-primary"/>
                 </div>
             </div>

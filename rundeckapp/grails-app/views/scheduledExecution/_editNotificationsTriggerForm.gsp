@@ -1,3 +1,19 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%@ page import="com.dtolabs.rundeck.core.plugins.configuration.PropertyScope; com.dtolabs.rundeck.core.plugins.configuration.Description" %>
 <g:set var="tkey" value="${g.rkey()}"/>
 <div class="notifyFields form-group"
@@ -162,9 +178,29 @@
                 <div>
                     <g:checkBox name="${checkboxFieldName}" value="true"
                                 checked="${definedNotif ? true : false}"/>
-                    <label for="${enc(attr:checkboxFieldName)}"><g:enc>${pluginDescription['title'] ?: pluginDescription['name'] ?: pluginName}</g:enc></label>
+                    <label for="${enc(attr:checkboxFieldName)}">
+                    <stepplugin:pluginIcon service="Notification"
+                                           name="${pluginName}"
+                                           width="16px"
+                                           height="16px">
+                    </stepplugin:pluginIcon>
+                    <stepplugin:message
+                            service="Notification"
+                            name="${pluginName}"
+                            code="plugin.title"
+                            default="${pluginDescription.title?:pluginName}"/>
+                </label>
                     <g:if test="${pluginDescription['description']}">
-                        <span class="text-muted"><g:enc>${pluginDescription['description']}</g:enc></span>
+                        <span class="text-muted"><g:render template="/scheduledExecution/description"
+                                                           model="[description:
+                                                                           stepplugin.messageText(
+                                                                                   service: 'Notification',
+                                                                                   name: pluginName,
+                                                                                   code: 'plugin.description',
+                                                                                   default: pluginDescription.description
+                                                                           ),
+                                                                   textCss    : '',
+                                                                   mode       : 'hidden', rkey: g.rkey()]"/></span>
                     </g:if>
                 </div>
 
@@ -179,6 +215,8 @@
 
                             <g:if test="${pluginDescription?.properties}">
                                 <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                                        service:com.dtolabs.rundeck.plugins.ServiceNameConstants.Notification,
+                                        provider:pluginDescription.name,
                                         properties:pluginDescription?.properties,
                                         report:validation,
                                         prefix:prefix,
@@ -190,7 +228,11 @@
                             </g:if>
 
                             <g:if test="${!pluginDescription?.properties}">
-                                <span class="text-muted">No configuration properties for <g:enc>${pluginDescription['title'] ?: pluginDescription['name'] ?: pluginName}</g:enc></span>
+                                <span class="text-muted">
+                                    <g:message code="notification.plugin.configuration.noproperties.message"
+                                               args="${pluginDescription['title'] ?:
+                                                       pluginDescription['name'] ?: pluginName}"/>
+                                </span>
                             </g:if>
                         </div>
                     </g:if>

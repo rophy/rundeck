@@ -1,4 +1,20 @@
-<%@ page import="rundeck.User; com.dtolabs.rundeck.server.authorization.AuthConstants" %>
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
+<%@ page import="rundeck.ScheduledExecution; rundeck.User; com.dtolabs.rundeck.server.authorization.AuthConstants" %>
 
 <g:jsonToken id="job_edit_tokens" url="${request.forwardURI}"/>
 <div class="list-group">
@@ -126,7 +142,7 @@ function getCurSEID(){
             registerNodeFilters(jobRefNodeFilter,root);
         }
         function pageinit(){
-            _enableDragdrop();
+            _enableWFDragdrop();
 
             Event.observe(document,'keydown',function(evt){
                 //escape key hides popup bubble
@@ -178,7 +194,7 @@ function getCurSEID(){
         font-size:100%;
     }
     /** drag and drop for workflow editor */
-    #workflowDropfinal.ready{
+    .dragdropfinal.ready{
         padding:2px;
         margin-top:3px;
         display:block;
@@ -186,13 +202,13 @@ function getCurSEID(){
         -webkit-border-radius: 3px;
         border-radius: 3px;
     }
-    #workflowContent ol li{
+    .draggableitem{
         padding:0;
     }
-    #workflowContent ol li.hoverActive{
+    .draggableitem.hoverActive{
         border-top: 2px solid blue;
     }
-    #workflowDropfinal.hoverActive{
+    .dragdropfinal.hoverActive{
         border-top: 2px solid blue;
         padding:8px;
 
@@ -408,14 +424,36 @@ function getCurSEID(){
     <div class="form-group ${hasErrors(bean: scheduledExecution, field: 'description', 'has-error')}">
         <label for="description" class="${labelColClass}"><g:message code="scheduledExecution.property.description.label" /></label>
         <div class="${fieldColSize}">
-            <g:textArea name="description"
-                        value="${scheduledExecution?.description}"
-                        cols="80"
-                        rows="3"
-                        class="form-control ace_editor"
-                        data-ace-session-mode="markdown"
-                        data-ace-height="120px"
-            />
+            <ul class="nav nav-tabs">
+
+                <li class="active"><a href="#desceditor" data-toggle="tab">Edit</a></li>
+                <li id="previewrunbook" style="${wdgt.styleVisible(
+                        if: g.textHasMarker(text:scheduledExecution?.description,marker:ScheduledExecution.RUNBOOK_MARKER)
+                )}">
+                    <a href="#descpreview" data-toggle="tab">
+                        <g:message code="job.editor.preview.runbook" />
+                    </a>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+
+                <div class="tab-pane active" id="desceditor">
+                    <g:textArea name="description"
+                                value="${scheduledExecution?.description}"
+                                cols="80"
+                                rows="3"
+                                class="form-control ace_editor _job_description"
+                                data-ace-session-mode="markdown"
+                                data-ace-height="120px"
+                                data-ace-resize-auto="true"
+                                data-ace-resize-max="30"
+                    />
+                </div>
+                <div class="tab-pane panel panel-default panel-tab-content" id="descpreview">
+                    <div class="panel-body" id="descpreview_content"></div>
+                </div>
+            </div>
             <g:hasErrors bean="${scheduledExecution}" field="description">
                 <i class="glyphicon glyphicon-warning-sign text-warning"></i>
             </g:hasErrors>
@@ -423,21 +461,32 @@ function getCurSEID(){
                    value="${!(grailsApplication.config.rundeck?.gui?.job?.description?.disableHTML in [true, 'true'])}"/>
             <div class="help-block">
                 <g:if test="${allowHTML}">
-                    <g:message code="ScheduledExecution.property.description.description"/>
-                    <a href="http://en.wikipedia.org/wiki/Markdown" target="_blank" class="text-info">
-                        <i class="glyphicon glyphicon-question-sign"></i>
-                    </a>
+                    <g:render template="/scheduledExecution/description"
+                              model="${[description: g.message(code:"ScheduledExecution.property.description.description"),mode:'collapsed',rkey:g.rkey()]}"/>
                 </g:if>
                 <g:else>
                     <g:message code="ScheduledExecution.property.description.plain.description"/>
                 </g:else>
             </div>
             <g:javascript>
-            jQuery(function(){
-                jQuery('textarea.ace_editor').each(function(){
-                    _addAceTextarea(this);
+                jQuery(function () {
+                    jQuery('textarea.ace_editor._job_description').each(function () {
+                        var editor = _addAceTextarea(this, function (editor) {
+                            "use strict";
+                            //test if a runbook was added, enable preview tab
+                            if (_hasJobDescriptionRunbook(editor.getValue())) {
+                                jQuery('#previewrunbook').show();
+                            }else{
+                                jQuery('#previewrunbook').hide();
+                            }
+                        });
+
+                        _setupMarkdeepPreviewTab('previewrunbook', 'descpreview_content', function () {
+                            return _jobDescriptionRunbook(editor.getValue());
+                        });
+
+                    });
                 });
-            });
             </g:javascript>
         </div>
     </div>

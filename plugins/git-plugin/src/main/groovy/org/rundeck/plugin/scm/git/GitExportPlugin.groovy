@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.rundeck.plugin.scm.git
 
 import com.dtolabs.rundeck.core.jobs.JobReference
@@ -12,6 +28,7 @@ import org.eclipse.jgit.lib.BranchTrackingStatus
 import org.eclipse.jgit.revwalk.RevCommit
 import org.rundeck.plugin.scm.git.config.Export
 import org.rundeck.plugin.scm.git.exp.actions.CommitJobsAction
+import org.rundeck.plugin.scm.git.exp.actions.FetchAction
 import org.rundeck.plugin.scm.git.exp.actions.PushAction
 import org.rundeck.plugin.scm.git.exp.actions.SynchAction
 import org.rundeck.plugin.scm.git.exp.actions.TagAction
@@ -28,6 +45,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
     public static final String PROJECT_PUSH_ACTION_ID = "project-push"
     public static final String PROJECT_TAG_ACTION_ID = "tag-commit"
     public static final String PROJECT_SYNCH_ACTION_ID = "project-synch"
+    public static final String PROJECT_FETCH_ACTION_ID = "project-fetch"
 
 
     String format = SERIALIZE_FORMAT
@@ -64,6 +82,11 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
                         PROJECT_SYNCH_ACTION_ID,
                         "Synch with Remote",
                         "Synch incoming changes from Remote"
+                ),
+                (PROJECT_FETCH_ACTION_ID) : new FetchAction(
+                        PROJECT_FETCH_ACTION_ID,
+                        "Fetch Remote Changes",
+                        "Fetch changes from Remote for local comparison"
                 ),
                 (PROJECT_TAG_ACTION_ID)   : new TagAction(
                         PROJECT_TAG_ACTION_ID,
@@ -156,7 +179,9 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
             } else if (status.state == SynchState.REFRESH_NEEDED) {
                 //need to fast forward
                 actionRefs PROJECT_SYNCH_ACTION_ID
-            } else {
+            } else if(!config.shouldFetchAutomatically()){
+                actionRefs PROJECT_FETCH_ACTION_ID
+            }else{
                 null
             }
         } else {
@@ -167,7 +192,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
 
     @Override
     ScmExportSynchState getStatus(ScmOperationContext context) {
-        return getStatusInternal(context, true)
+        return getStatusInternal(context, config.shouldFetchAutomatically())
     }
 
 
@@ -232,14 +257,14 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
     @Override
     JobState jobChanged(JobChangeEvent event, JobExportReference exportReference) {
         File origfile = mapper.fileForJob(event.originalJobReference)
-        File outfile = mapper.fileForJob(event.jobReference)
+        File outfile = mapper.fileForJob(exportReference)
         String origPath = null
         log.debug("Job event (${event}), writing to path: ${outfile}")
         switch (event.eventType) {
             case JobChangeEvent.JobChangeEventType.DELETE:
                 origfile.delete()
-                def status = refreshJobStatus(event.jobReference, origPath, false)
-                jobStateMap.remove(event.jobReference.id)
+                def status = refreshJobStatus(exportReference, origPath, false)
+                jobStateMap.remove(exportReference.id)
                 return createJobStatus(status, jobActionsForStatus(status))
                 break;
 
@@ -251,7 +276,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
                     origfile.delete()
                 }
                 try {
-                    serialize(exportReference, format, outfile)
+                    serialize(exportReference, format, config.exportPreserve, config.exportOriginal, outfile)
                 } catch (Throwable t) {
                     getLogger().warn("Could not serialize job: ${t}", t)
                 }
@@ -268,10 +293,10 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
         String ident = createStatusCacheIdent(job, commit)
 
         if (jobStateMap[job.id] && jobStateMap[job.id].ident == ident) {
-            log.debug("hasJobStatusCached(${ident}): FOUND")
+            log.debug("hasJobStatusCached(${ident}): FOUND for path $path")
             return jobStateMap[job.id]
         }
-        log.debug("hasJobStatusCached(${ident}): (no)")
+        log.debug("hasJobStatusCached(${ident}): (no) for path $path")
 
         null
     }
@@ -298,7 +323,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
 
 
         if (job instanceof JobExportReference && doSerialize) {
-            serialize(job, format)
+            serialize(job, format, config.exportPreserve, config.exportOriginal)
         }
 
 
@@ -386,7 +411,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
 
     @Override
     JobState getJobStatus(final JobExportReference job, final String originalPath) {
-        log.debug("getJobStatus(${job.id},${originalPath})")
+        log.debug("getJobStatus(${job.id},${originalPath}): ${job}")
         if (!inited) {
             return null
         }
@@ -418,7 +443,7 @@ class GitExportPlugin extends BaseGitPlugin implements ScmExportPlugin {
     ScmDiffResult getFileDiff(final JobExportReference job, final String originalPath) throws ScmPluginException {
         def file = getLocalFileForJob(job)
         def path = originalPath ?: relativePath(job)
-        serialize(job, format)
+        serialize(job, format, config.exportPreserve, config.exportOriginal)
 
         def id = lookupId(getHead(), path)
         if (!id) {

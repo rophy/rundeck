@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.rundeck.app.support.PluginConfigParams
@@ -1082,8 +1098,14 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             //validate input values
             final nevalidation = frameworkService.validateServiceConfig(nodeExecType, "", nodeConfig, nodeExecService)
             if (!nevalidation.valid) {
-                nodeexecreport = nevalidation.report
-                errors << nevalidation.error ? "Node Executor configuration was invalid: " + nevalidation.error : "Node Executor configuration was invalid"
+                nodeexecreport = nevalidation.report ? frameworkService.remapReportProperties(
+                        nevalidation.report,
+                        nodeExecType,
+                        nodeExecService
+
+                ) : null
+                errors << (nevalidation.error ? ("Node Executor configuration was invalid: " + nevalidation.error) :
+                        "Node Executor configuration was invalid: " + nodeexecreport?.toString())
             }else{
                 //store back in props
                 frameworkService.addProjectNodeExecutorPropertiesForType(nodeExecType, projProps, nodeConfig)
@@ -1106,8 +1128,13 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             //validate input values
             final fcvalidation = frameworkService.validateServiceConfig(fileCopyType, "", filecopyConfig, fileCopierService)
             if (!fcvalidation.valid) {
-                nodeexecreport = fcvalidation.report
-                errors << fcvalidation.error ? "File Copier configuration was invalid: " + fcvalidation.error : "File Copier configuration was invalid"
+                nodeexecreport = nevalidation.report ? frameworkService.remapReportProperties(
+                        nevalidation.report,
+                        fileCopyType,
+                        fileCopierService
+
+                ) : null
+                errors << (fcvalidation.error ? ("File Copier configuration was invalid: " + fcvalidation.error) : "File Copier configuration was invalid: "+nodeexecreport?.toString())
             }else{
                 frameworkService.addProjectFileCopierPropertiesForType(fileCopyType, projProps, filecopyConfig)
             }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import rundeck.filters.ApiRequestFilters
 
 class UrlMappings {
@@ -29,6 +45,8 @@ class UrlMappings {
         "/api/$api_version/job/$id"(controller: 'scheduledExecution') {
             action = [GET: 'apiJobExport', DELETE: 'apiJobDelete', PUT: 'apiJobUpdateSingle', POST: 'apiJobCreateSingle']
         }
+        "/api/$api_version/job/$id/info"(controller: 'menu', action: 'apiJobDetail')
+
 
         "/api/$api_version/job/$id/execution/enable"(controller: 'scheduledExecution') {
             action = [POST: 'apiFlipExecutionEnabled']
@@ -106,7 +124,7 @@ class UrlMappings {
         "/api/$api_version/project/$project/resource/$name"(controller: 'framework',action:"apiResourcev14")
         "/api/$api_version/project/$project/run/command"(controller: 'scheduledExecution', action: 'apiRunCommandv14')
         "/api/$api_version/project/$project/run/script"(controller: 'scheduledExecution', action: 'apiRunScriptv14')
-        "/api/$api_version/project/$project/run/url"(controller: 'scheduledExecution', action: 'apiRunScriptUrl14')
+        "/api/$api_version/project/$project/run/url"(controller: 'scheduledExecution', action: 'apiRunScriptUrlv14')
         "/api/$api_version/project/$project/history"(controller: 'reports', action: 'apiHistoryv14')
 
         "/api/$api_version/project/$project/scm/$integration/plugins"(controller: 'scm', action: 'apiPlugins')
@@ -180,6 +198,7 @@ class UrlMappings {
         "/api/$api_version/$action?"(controller: 'api', action: 'invalid')
 
         //simplified url mappings for link generation
+        "/project/$project/home"(controller: 'menu', action: 'projectHome')
         "/project/$project/nodes/"(controller: 'framework', action: 'nodes')
         "/project/$project/run/"(controller: 'framework', action: 'nodes')
         "/project/$project/scm/$integration?/$action?"(controller: 'scm')
@@ -215,6 +234,10 @@ class UrlMappings {
         "/storage/download/keys/$resourcePath**"(controller: 'storage', action: 'keyStorageDownload')
         "/job/show/$id"(controller: 'scheduledExecution',action: 'show')
         "/execution/show/$id"(controller: 'execution',action: 'show')
+        "/plugin/icon/$service/$name"(controller: 'plugin', action: 'pluginIcon')
+        "/plugin/file/$service/$name/$path**"(controller: 'plugin', action: 'pluginFile')
+        "/plugin/i18n/$service/$name/$path**"(controller: 'plugin', action: 'pluginMessages')
+
         "404"(view: '/404')
         "500"(view: '/error')
     }

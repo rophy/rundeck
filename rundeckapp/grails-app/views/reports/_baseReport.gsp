@@ -1,3 +1,19 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%@ page import="rundeck.Execution; rundeck.ScheduledExecution; rundeck.ExecReport" %>
 <%--
   Created by IntelliJ IDEA.
@@ -39,7 +55,7 @@
                 <input type="checkbox" value="${enc(attr:rpt.jcExecId)}" name="bulk_edit" class="_defaultInput bulk_edit"/>
             </td>
             </g:if>
-            <g:set var="statusIcon" value="${!execution.dateCompleted ? 'running' : execution.statusSucceeded() ?
+            <g:set var="statusIcon" value="${execution.status == 'scheduled' ? 'time' : !execution.dateCompleted ? 'running' : execution.statusSucceeded() ?
                     'succeed' : execution.cancelled ? 'aborted' :execution.willRetry ? 'failedretry' :execution.timedOut ? 'timedout' :
                     execution.status in ['false','failed']?'fail':'other'}"/>
             <g:set var="statusIcon" value="${[succeeded:'succeed','failed-with-retry':'failedretry',failed:'fail'].get(status)?:status}"/>
@@ -108,10 +124,12 @@
                     <g:unless test="${hideDate}">
                     <span class="timeabs"><g:formatDate date="${it?.dateCompleted}" formatName="jobslist.date.format"/></span>
                     </g:unless>
-                    <span title="<g:relativeDate atDate='${it?.dateStarted}'/> to <g:relativeDate
-                            atDate='${it?.dateCompleted}'/> ">
-                        in <g:relativeDate end="${it?.dateCompleted}" start="${it?.dateStarted}"/>
-                    </span>
+                    <g:if test="${it?.dateStarted?.getTime() < it?.dateCompleted?.getTime()}">
+                        <span title="<g:relativeDate atDate='${it?.dateStarted}'/> to <g:relativeDate
+                                atDate='${it?.dateCompleted}'/> ">
+                            in <g:relativeDate end="${it?.dateCompleted}" start="${it?.dateStarted}"/>
+                        </span>
+                    </g:if>
                 </g:if>
             </td>
 
