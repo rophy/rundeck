@@ -1,10 +1,14 @@
+import com.dtolabs.rundeck.app.api.ApiMarshallerRegistrar
 import com.dtolabs.rundeck.app.internal.framework.FrameworkPropertyLookupFactory
 import com.dtolabs.rundeck.app.internal.framework.RundeckFrameworkFactory
 import com.dtolabs.rundeck.core.Constants
 import com.dtolabs.rundeck.core.authorization.AuthorizationFactory
 import com.dtolabs.rundeck.core.common.FrameworkFactory
 import com.dtolabs.rundeck.core.common.NodeSupport
+import com.dtolabs.rundeck.core.plugins.FilePluginCache
+import com.dtolabs.rundeck.core.plugins.JarPluginScanner
 import com.dtolabs.rundeck.core.plugins.PluginManagerService
+import com.dtolabs.rundeck.core.plugins.ScriptPluginScanner
 import com.dtolabs.rundeck.core.storage.AuthRundeckStorageTree
 import com.dtolabs.rundeck.core.utils.GrailsServiceInjectorJobListener
 import com.dtolabs.rundeck.server.plugins.PluginCustomizer
@@ -76,7 +80,7 @@ beans={
     frameworkFilesystem(FrameworkFactory,rdeckBase){ bean->
         bean.factoryMethod='createFilesystemFramework'
     }
-    filesystemProjectManager(FrameworkFactory,frameworkFilesystem){ bean->
+    filesystemProjectManager(FrameworkFactory,frameworkFilesystem,ref('nodeService')){ bean->
         bean.factoryMethod='createProjectManager'
     }
 
@@ -86,17 +90,45 @@ beans={
         type=application.config.rundeck?.projectsStorageType?:'filesystem'
         dbProjectManager=ref('projectManagerService')
         filesystemProjectManager=ref('filesystemProjectManager')
+        pluginManagerService=ref('rundeckServerServiceProviderLoader')
     }
+
     rundeckFramework(frameworkFactory:'createFramework'){
     }
+
     def configDir = new File(Constants.getFrameworkConfigDir(rdeckBase))
+
     rundeckFilesystemPolicyAuthorization(AuthorizationFactory, configDir){bean->
         bean.factoryMethod='createFromDirectory'
     }
+
+    //cache for provider loaders bound to a file
+    providerFileCache(PluginManagerService) { bean ->
+        bean.factoryMethod = 'createProviderLoaderFileCache'
+    }
+
+    //scan for jar plugins
+    jarPluginScanner(JarPluginScanner, pluginDir, cacheDir, ref('providerFileCache'), 5000)
+
+    //scan for script-based plugins
+    scriptPluginScanner(ScriptPluginScanner, pluginDir, cacheDir, ref('providerFileCache'), 5000)
+
+    //cache for plugins loaded via scanners
+    filePluginCache(FilePluginCache, ref('providerFileCache')) {
+        scanners = [
+                ref('jarPluginScanner'),
+                ref('scriptPluginScanner')
+        ]
+    }
+
     /*
      * Define beans for Rundeck core-style plugin loader to load plugins from jar/zip files
      */
-    rundeckServerServiceProviderLoader(PluginManagerService, pluginDir, cacheDir)
+    rundeckServerServiceProviderLoader(PluginManagerService) {
+        extdir = pluginDir
+        cachedir = cacheDir
+        cache = filePluginCache
+    }
 
     /**
      * the Notification plugin provider service
@@ -125,6 +157,15 @@ beans={
     logFileTaskExecutor(SimpleAsyncTaskExecutor,"LogFileStorage"){
         concurrencyLimit= 2 + (application.config.rundeck?.execution?.logs?.fileStorage?.concurrencyLimit ?: 5)
     }
+    nodeTaskExecutor(SimpleAsyncTaskExecutor,"NodeService-SourceLoader") {
+        concurrencyLimit = (application.config.rundeck?.nodeService?.concurrencyLimit ?: 25) //-1 for unbounded
+    }
+    //alternately use ThreadPoolTaskExecutor ...
+//    nodeTaskExecutor(ThreadPoolTaskExecutor) {
+//        threadNamePrefix="NodeService-SourceLoader"
+//        corePoolSize= (application.config.rundeck?.nodeService?.corePoolSize ?: 5)
+//        maxPoolSize= (application.config.rundeck?.nodeService?.maxPoolSize ?: 40)
+//    }
 
     pluggableStoragePluginProviderService(PluggableStoragePluginProviderService) {
         rundeckServerServiceProviderLoader = ref('rundeckServerServiceProviderLoader')
@@ -226,4 +267,9 @@ beans={
     resourcesPasswordFieldsService(PasswordFieldsService)
     execPasswordFieldsService(PasswordFieldsService)
     fcopyPasswordFieldsService(PasswordFieldsService)
+
+
+    /// XML/JSON custom marshaller support
+
+    apiMarshallerRegistrar(ApiMarshallerRegistrar)
 }

@@ -122,8 +122,15 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
             return null
         }
 
+        def msgs = []
         if (performFetch) {
-            fetchFromRemote(context)
+            try {
+                fetchFromRemote(context)
+            } catch (Exception e) {
+                msgs<<"Fetch from the repository failed: ${e.message}"
+                logger.error("Failed fetch from the repository: ${e.message}")
+                logger.debug("Failed fetch from the repository: ${e.message}", e)
+            }
         }
 
         int importNeeded = 0
@@ -173,7 +180,6 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
         } else {
             state.state = ImportSynchState.CLEAN
         }
-        def msgs = []
 
         if (bstat && bstat.behindCount > 0) {
             msgs << "${bstat.behindCount} changes from remote need to be pulled"
@@ -334,8 +340,17 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
         if (!status) {
             status = refreshJobStatus(job, originalPath)
         }
-        return createJobImportStatus(status)
+        return createJobImportStatus(status,jobActionsForStatus(status))
     }
+
+    List<Action> jobActionsForStatus(Map status) {
+        if (status.synch == ImportSynchState.IMPORT_NEEDED) {
+            [actions[ACTION_IMPORT_ALL]]
+        } else {
+            []
+        }
+    }
+
 
     @Override
     JobImportState jobChanged(JobChangeEvent event, JobScmReference reference) {
@@ -349,7 +364,9 @@ class GitImportPlugin extends BaseGitPlugin implements ScmImportPlugin {
         switch (event.eventType) {
             case JobChangeEvent.JobChangeEventType.DELETE:
                 importTracker.untrackPath(path)
-                return createJobImportStatus([synch: ImportSynchState.IMPORT_NEEDED])
+
+                def status = [synch: ImportSynchState.IMPORT_NEEDED]
+                return createJobImportStatus(status,jobActionsForStatus(status))
                 break;
 
             case JobChangeEvent.JobChangeEventType.MODIFY_RENAME:

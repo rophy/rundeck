@@ -1,6 +1,429 @@
 % Changelog
 % greg
-% 10/08/2015
+% 04/29/2016
+
+Release 2.6.7
+===========
+
+Date: 2016-04-29
+
+Name: <span style="color: goldenrod"><span class="glyphicon glyphicon-plane"></span> "cafe bonbon goldenrod plane"</span>
+
+## Notes
+
+Bug fixes.
+
+## Contributors
+
+* Greg Schueler (gschueler)
+* sebastianopilla
+
+## Bug Reporters
+
+* ahonor
+* ajxb
+* alexey-pankratyev
+* amitk75
+* david-richer-adsk
+* gschueler
+* jyaworski
+* kmusard
+* ltamaster
+* sebastianopilla
+
+## Issues
+
+* [Resource Model source errors are not properly shown in config page (2.6.6)](https://github.com/rundeck/rundeck/issues/1830)
+* [Directory Resource Issue using JSON files](https://github.com/rundeck/rundeck/issues/1828)
+* [2.6.6: when adding a new project, the home page may not load the project action buttons properly](https://github.com/rundeck/rundeck/issues/1821)
+* [API: /project/X/resources for invalid project results in 500 instead of 404 response](https://github.com/rundeck/rundeck/issues/1820)
+* [Place Jetty work directory outside of the installation tree](https://github.com/rundeck/rundeck/pull/1819)
+* [CLI tool: "Response content unexpectedly empty" message](https://github.com/rundeck/rundeck/issues/1818)
+* [use separate cli-log4j.properties log4j config for cli tools](https://github.com/rundeck/rundeck/pull/1816)
+* [Git Export and Git Import in YAML format issue in 2.6.6](https://github.com/rundeck/rundeck/issues/1815)
+* [CLI tools should allow relative urls](https://github.com/rundeck/rundeck/issues/1774)
+* [Error in "run" command](https://github.com/rundeck/rundeck/issues/1693)
+* [Project configured for Git export becomes unavailable if repo is not accessible](https://github.com/rundeck/rundeck/issues/1624)
+* [Log file uses system default file encoding, should force UTF-8](https://github.com/rundeck/rundeck/issues/1619)
+* [SCM does not change branches once created](https://github.com/rundeck/rundeck/issues/1515)
+* [Retry Failed Nodes does not handle nodes with spaces](https://github.com/rundeck/rundeck/issues/1508)
+* [Node name with / character causes GUI execution state to be incorrect](https://github.com/rundeck/rundeck/issues/1457)
+
+---
+
+Release 2.6.6
+===========
+
+Date: 2016-04-15
+
+Name: <span style="color: fuchsia"><span class="glyphicon glyphicon-phone"></span> "cafe bonbon fuchsia phone"</span>
+
+## Notes
+
+(Release 2.6.5 was missing some changes noted here, so 2.6.6 includes those changes. 2.6.5 release notes are repeated here.)
+
+Primarily bug fixes and performance improvements.
+
+Notably:
+
+* Startup time improved for Rundeck installs with many (thousands) of projects
+* Fixes for node sources and asynchronous node loading
+* new healthcheck for database latency
+
+## Contributors
+
+* Bharadwaj P (t20)
+* Greg Schueler (gschueler)
+
+## Bug Reporters
+
+* ahonor
+* david-gregory-inmar
+* fiquett
+* gschueler
+* hyuan-esol
+* jippi
+* joshuaspence
+* ltamaster
+* nilroy
+* t20
+
+## Issues
+
+* [healthcheck: add database pingtime healthcheck](https://github.com/rundeck/rundeck/issues/1809)
+* [API enhancement: takeover schedule for a single job](https://github.com/rundeck/rundeck/issues/1807)
+* [Error connecting to OpenSSH 7.2p2. server](https://github.com/rundeck/rundeck/issues/1797)
+* [Throw SSHProtocolFailure error when SSH to a remote machine running OpenSSH 7.2p2](https://github.com/rundeck/rundeck/issues/1796)
+* [Job execution error in log after schedule takeover](https://github.com/rundeck/rundeck/issues/1795)
+* [Request to /scheduler/takeover for all jobs should skip already owned jobs](https://github.com/rundeck/rundeck/issues/1794)
+* [Response for /scheduler/takeover indicates prior owner's server uuid](https://github.com/rundeck/rundeck/issues/1793)
+* [SSH: when node has blank hostname, it attempts to connect to localhost.](https://github.com/rundeck/rundeck/issues/1790)
+* [rd-jobs list export schedule.time.hour wrong](https://github.com/rundeck/rundeck/issues/1773)
+* [Slow startup due to incomplete log storage requests](https://github.com/rundeck/rundeck/issues/1771)
+* [(2.6.4) Create project fails after second submit](https://github.com/rundeck/rundeck/issues/1770)
+* [fix #1744 first node load is synchronous](https://github.com/rundeck/rundeck/pull/1769)
+* [fix #1764 slow home page with many projects](https://github.com/rundeck/rundeck/pull/1765)
+* [Slow main page with many projects](https://github.com/rundeck/rundeck/issues/1764)
+* [Nodes list error when the remoteUrl is defined](https://github.com/rundeck/rundeck/issues/1760)
+* [spurious "removeScriptPluginCache: /var/lib/rundeck/libext/cache/..." message](https://github.com/rundeck/rundeck/issues/1749)
+* [GUI enhancement: show owner server UUID for scheduled jobs](https://github.com/rundeck/rundeck/issues/1747)
+* [API enhancement: cluster mode ability to find server UUID for scheduled jobs](https://github.com/rundeck/rundeck/issues/1746)
+* [Initial resource model loading is not asynchronous](https://github.com/rundeck/rundeck/issues/1744)
+* [unable to save jobs when notification plugin used](https://github.com/rundeck/rundeck/issues/1740)
+* [Upgrade Apache Commons Collections to v3.2.2](https://github.com/rundeck/rundeck/pull/1736)
+* [After 2.6.3 upgrade, nodes are not updated](https://github.com/rundeck/rundeck/issues/1725)
+* [Incomplete log file storage request should be cancelled after final retry, or retriable via API](https://github.com/rundeck/rundeck/issues/1719)
+* [Listing Running Executions API, "Total" error value using wildcard ("*") in the URL](https://github.com/rundeck/rundeck/issues/1711)
+* [In the summary page, a failed node reports failure on the wrong step (2.5.3-1)](https://github.com/rundeck/rundeck/issues/1411)
+* [MailNotificationPlugin.groovy does not work with rundeck 2.5.2](https://github.com/rundeck/rundeck/issues/1361)
+
+---
+
+Release 2.6.5
+===========
+
+Date: 2016-04-15
+
+Name: <span style="color: forestgreen"><span class="glyphicon glyphicon-paperclip"></span> "cafe bonbon forestgreen paperclip"</span>
+
+## Notes
+
+Primarily bug fixes and performance improvements.
+
+Notably:
+
+* Startup time improved for Rundeck installs with many (thousands) of projects
+* Fixes for node sources and asynchronous node loading
+* new healthcheck for database latency
+
+## Contributors
+
+* Bharadwaj P (t20)
+* Greg Schueler (gschueler)
+
+## Bug Reporters
+
+* ahonor
+* david-gregory-inmar
+* fiquett
+* gschueler
+* hyuan-esol
+* jippi
+* joshuaspence
+* ltamaster
+* nilroy
+* t20
+
+## Issues
+
+* [healthcheck: add database pingtime healthcheck](https://github.com/rundeck/rundeck/issues/1809)
+* [API enhancement: takeover schedule for a single job](https://github.com/rundeck/rundeck/issues/1807)
+* [Error connecting to OpenSSH 7.2p2. server](https://github.com/rundeck/rundeck/issues/1797)
+* [Throw SSHProtocolFailure error when SSH to a remote machine running OpenSSH 7.2p2](https://github.com/rundeck/rundeck/issues/1796)
+* [Job execution error in log after schedule takeover](https://github.com/rundeck/rundeck/issues/1795)
+* [Request to /scheduler/takeover for all jobs should skip already owned jobs](https://github.com/rundeck/rundeck/issues/1794)
+* [Response for /scheduler/takeover indicates prior owner's server uuid](https://github.com/rundeck/rundeck/issues/1793)
+* [SSH: when node has blank hostname, it attempts to connect to localhost.](https://github.com/rundeck/rundeck/issues/1790)
+* [rd-jobs list export schedule.time.hour wrong](https://github.com/rundeck/rundeck/issues/1773)
+* [Slow startup due to incomplete log storage requests](https://github.com/rundeck/rundeck/issues/1771)
+* [(2.6.4) Create project fails after second submit](https://github.com/rundeck/rundeck/issues/1770)
+* [fix #1744 first node load is synchronous](https://github.com/rundeck/rundeck/pull/1769)
+* [fix #1764 slow home page with many projects](https://github.com/rundeck/rundeck/pull/1765)
+* [Slow main page with many projects](https://github.com/rundeck/rundeck/issues/1764)
+* [Nodes list error when the remoteUrl is defined](https://github.com/rundeck/rundeck/issues/1760)
+* [spurious "removeScriptPluginCache: /var/lib/rundeck/libext/cache/..." message](https://github.com/rundeck/rundeck/issues/1749)
+* [GUI enhancement: show owner server UUID for scheduled jobs](https://github.com/rundeck/rundeck/issues/1747)
+* [API enhancement: cluster mode ability to find server UUID for scheduled jobs](https://github.com/rundeck/rundeck/issues/1746)
+* [Initial resource model loading is not asynchronous](https://github.com/rundeck/rundeck/issues/1744)
+* [unable to save jobs when notification plugin used](https://github.com/rundeck/rundeck/issues/1740)
+* [Upgrade Apache Commons Collections to v3.2.2](https://github.com/rundeck/rundeck/pull/1736)
+* [After 2.6.3 upgrade, nodes are not updated](https://github.com/rundeck/rundeck/issues/1725)
+* [Incomplete log file storage request should be cancelled after final retry, or retriable via API](https://github.com/rundeck/rundeck/issues/1719)
+* [Listing Running Executions API, "Total" error value using wildcard ("*") in the URL](https://github.com/rundeck/rundeck/issues/1711)
+* [In the summary page, a failed node reports failure on the wrong step (2.5.3-1)](https://github.com/rundeck/rundeck/issues/1411)
+* [MailNotificationPlugin.groovy does not work with rundeck 2.5.2](https://github.com/rundeck/rundeck/issues/1361)
+
+---
+
+Release 2.6.4
+===========
+
+Date: 2016-03-04
+
+Name: <span style="color: firebrick"><span class="glyphicon glyphicon-music"></span> "cafe bonbon firebrick music"</span>
+
+## Notes
+
+Bug fixes.
+
+## Contributors
+
+* Greg Schueler (gschueler)
+
+## Bug Reporters
+
+* gschueler
+* richiereynolds
+* schast
+* tkald
+* wufpack00
+
+## Issues
+
+* [SCM initialization can cause slow startup with many projects](https://github.com/rundeck/rundeck/issues/1721)
+* [java.lang.NullPointerException Rundeck 2.6.3](https://github.com/rundeck/rundeck/issues/1717)
+* [After 2.6.3 upgrade, node page doesn't display nodes correctly.](https://github.com/rundeck/rundeck/issues/1716)
+* [After 2.6.3 upgrade, ACL that does not allow job create/delete always shows Bulk edit checkboxes](https://github.com/rundeck/rundeck/issues/1714)
+* [Error after Upgrade to 2.6.3: Failed loading resource model source, java.lang.IllegalStateException: Recursive load](https://github.com/rundeck/rundeck/issues/1713)
+
+---
+
+Release 2.6.3
+===========
+
+Date: 2016-02-25
+
+Name: <span style="color: dodgerblue"><span class="glyphicon glyphicon-leaf"></span> "cafe bonbon dodgerblue leaf"</span>
+
+## Notes
+
+Primarily bug fixes, and some enhancements:
+
+* Asynchronous nodes cache. Per-project and global toggle and configurable retention delay.
+By default, projects now use an asynchronous method for	retrieving Node data from Resource Model Sources. 
+You should see an improvement in page load when using slow model sources (such as a URL for a slow endpoint).
+* Performance improvements with many thousands of Nodes.  The Nodes and Commands page, as well as other places
+where Nodes are loaded (e.g. Job editor) now should be much more responsive when you have e.g. 20K nodes.
+The Nodes page now uses result paging, and some parts of the UI now truncate the result set as well if you have many nodes.
+
+
+## Contributors
+
+* Alex Honor (ahonor)
+* Bryon Williams
+* Greg Schueler (gschueler)
+* Luis Toledo
+* Miguel A. Fuentes Buchholtz (miguelantonio)
+* Rophy Tsai (rophy)
+* mathieuchateau
+
+## Bug Reporters
+
+* Alicia-Solinea
+* SydOps
+* ahonor
+* ajxb
+* arminioa
+* bryonwilliams
+* gschueler
+* kamaradclimber
+* kmusard
+* ltamaster
+* makered
+* mathieuchateau
+* obrienmorgan
+* rasebo
+* richiereynolds
+* robizz
+* rophy
+* schast
+* snebel29
+* ssbarnea
+
+## Issues
+
+* [toggle job execution/schedule can be triggered with GET without synchronizer token](https://github.com/rundeck/rundeck/issues/1709)
+* [Add bulk job edit: enable/disable schedule and execution](https://github.com/rundeck/rundeck/issues/1703)
+* [ExecutionJob: Failed to update job statistics](https://github.com/rundeck/rundeck/issues/1701)
+* [some links are dead](https://github.com/rundeck/rundeck/issues/1688)
+* [Workflow step editor: after deleting a script and hitting save, it disappears](https://github.com/rundeck/rundeck/issues/1686)
+* [Code example in documentation incorrect](https://github.com/rundeck/rundeck/issues/1678)
+* [Documentation Proposed Change log4j](https://github.com/rundeck/rundeck/pull/1677)
+* [Missing step plugin causes execution to show no output](https://github.com/rundeck/rundeck/issues/1673)
+* [Orchestrator plugin input cannot use job options](https://github.com/rundeck/rundeck/issues/1672)
+* [missing API documentation for job execution and schedule enable/disable](https://github.com/rundeck/rundeck/issues/1670)
+* [SCM plugins not shown in Plugins listing page](https://github.com/rundeck/rundeck/issues/1668)
+* [Add documentation for changing date formats, and general localization](https://github.com/rundeck/rundeck/issues/1667)
+* [Script-based plugin setting for merging parent environment variables](https://github.com/rundeck/rundeck/issues/1666)
+* [Feature: Asynchronous nodes cache](https://github.com/rundeck/rundeck/pull/1662)
+* [Nodes UI page updates issues](https://github.com/rundeck/rundeck/issues/1658)
+* [Secure options with defaults in key storage](https://github.com/rundeck/rundeck/issues/1657)
+* [Node page UI updated for large node sets](https://github.com/rundeck/rundeck/pull/1651)
+* [rd-acl doesn't support project_acl resource type](https://github.com/rundeck/rundeck/issues/1650)
+* [lack of quoting tags links in Nodes browse page](https://github.com/rundeck/rundeck/issues/1647)
+* [SCM: GitExportPlugin - Could not serialize job: java.lang.IllegalArgumentException: Format not supported: yaml](https://github.com/rundeck/rundeck/issues/1644)
+* [SCM: NoSuchFileException](https://github.com/rundeck/rundeck/issues/1642)
+* [Passive mode - more explicit for already running job](https://github.com/rundeck/rundeck/pull/1635)
+* [Enhance project archive API: select only a set of executions for output](https://github.com/rundeck/rundeck/pull/1621)
+* [Added CODE renderingType to allow plugins to render textareas with th…](https://github.com/rundeck/rundeck/pull/1620)
+* [execution query api for older than relative date](https://github.com/rundeck/rundeck/pull/1617)
+* [fix #1525 project storage file read should not close stream](https://github.com/rundeck/rundeck/pull/1615)
+* [fix #1611](https://github.com/rundeck/rundeck/pull/1614)
+* [500 http response when execution does not exist](https://github.com/rundeck/rundeck/issues/1611)
+* [Invalid username and password message displayed on a successful login which was preceeded by a failed login](https://github.com/rundeck/rundeck/issues/1610)
+* [Querying 5k nodes leads to very long queries on the webui](https://github.com/rundeck/rundeck/issues/1597)
+* [fix long line wrapping for log output #1558](https://github.com/rundeck/rundeck/pull/1596)
+* [Multiple Authentication Modules documentation error](https://github.com/rundeck/rundeck/issues/1593)
+* [The size (8192) given to the column 'json_data' exceeds the maximum allowed for any data type (8000)](https://github.com/rundeck/rundeck/issues/1579)
+* [Document how to grant via ACL for Per-Job schedule and execution toggling](https://github.com/rundeck/rundeck/issues/1578)
+* [Console output is not wrapped making impossible to see long lines](https://github.com/rundeck/rundeck/issues/1558)
+* [Export project is not working when using the GUI - 2.6.0-1](https://github.com/rundeck/rundeck/issues/1525)
+* [Cancel/Save options on workflow step become unresponsive after error](https://github.com/rundeck/rundeck/issues/1448)
+* [Prevents remote option spam in issue 1391 by using onChange event](https://github.com/rundeck/rundeck/pull/1415)
+* [Log Output gone mad in 2.5.2](https://github.com/rundeck/rundeck/issues/1368)
+* [Simultaneously triggered jobs sometimes hang](https://github.com/rundeck/rundeck/issues/1310)
+* [Job timeouts before actual timeout value](https://github.com/rundeck/rundeck/issues/1302)
+
+---
+
+Release 2.6.2
+===========
+
+Date: 2015-12-02
+
+Name: <span style="color: crimson"><span class="glyphicon glyphicon-headphones"></span> "cafe bonbon crimson headphones"</span>
+
+## Notes
+
+This release includes bug fixes, and some enhancements.
+
+* Secure Job Options can now use Key Storage for defaults, enabling use via scheduled jobs
+* Quartz thread pool info and warnings added to system info
+* API added for SCM plugins, API version updated to v15
+* Plugins: input property definitions can now be placed in groups, which can be shown collapsed by default
+
+## Contributors
+
+* Greg Schueler (gschueler)
+
+## Bug Reporters
+
+* ahonor
+* gschueler
+* sea-lmarchal
+* stack72
+
+## Issues
+
+* [Feature/multifile storage](https://github.com/rundeck/rundeck/pull/1560)
+* [SCM API: push via project-commit action not working](https://github.com/rundeck/rundeck/issues/1553)
+* [SCM API: plugin type not checked for enable/disable](https://github.com/rundeck/rundeck/issues/1552)
+* [SSH debug logging is missing](https://github.com/rundeck/rundeck/issues/1546)
+* [plugin properties can be grouped](https://github.com/rundeck/rundeck/pull/1543)
+* [Feature: secure option can use key store for default values](https://github.com/rundeck/rundeck/pull/1537)
+* [for #1535 allow rundeck.basedir var in remote option file urls](https://github.com/rundeck/rundeck/pull/1536)
+* [Expand ${rdeck.base} for remoteUrl paths for options](https://github.com/rundeck/rundeck/issues/1535)
+* [2.6: startup message "Event listener rundeck.services.JobEventsService#jobChanged declared for topic jobChanged and namespace app but no such event is declared, you may never receive it"](https://github.com/rundeck/rundeck/issues/1532)
+* [Add Quartz Scheduler threadPool usage to metrics healthcheck, system info](https://github.com/rundeck/rundeck/pull/1530)
+* [Startup: ERROR level log: "ScheduledExecutionService - rescheduled job: 335"](https://github.com/rundeck/rundeck/issues/1529)
+* [Job succeeds instead of failing when executing a job-ref at the end](https://github.com/rundeck/rundeck/issues/1528)
+* [API for SCM plugins](https://github.com/rundeck/rundeck/pull/1526)
+* [SCM: add API support for SCM plugins](https://github.com/rundeck/rundeck/issues/1516)
+* [Error Deleting a Project](https://github.com/rundeck/rundeck/issues/1436)
+---
+
+Release 2.6.1
+===========
+
+Date: 2015-10-23
+
+Name: <span style="color: cornflowerblue"><span class="glyphicon glyphicon-globe"></span> "cafe bonbon cornflowerblue globe"</span>
+
+## Fixes
+
+Bugfixes for SCM plugins, and the Job execution/schedule toggle feature.
+
+## Contributors
+
+* Greg Schueler (gschueler)
+* Miguel A. Fuentes Buchholtz (miguelantonio)
+* robertopaez
+
+## Bug Reporters
+
+* LordMike
+* albertmfb
+* dustinak
+* fseiftsmlb
+* gschueler
+* jyaworski
+* katanafleet
+* miguelantonio
+* mprasil
+* oovoo
+* paulpet
+* rophy
+* tomkregenbild
+
+## Issues
+
+* [SCM plugin does not interpret variables in paths](https://github.com/rundeck/rundeck/issues/1510)
+* [CLI: Running rd-jobs list gives an error when user profile is incomplete and SCM is enabled](https://github.com/rundeck/rundeck/issues/1509)
+* [Upgrade to 2.6.0: schedule/execution enabled defaults to No](https://github.com/rundeck/rundeck/issues/1502)
+* [changes implementation of flipScheduleEnabled and flipExecutionEnable…](https://github.com/rundeck/rundeck/pull/1501)
+* [SCM: import while export plugin enabled can cause stacktrace/empty file](https://github.com/rundeck/rundeck/issues/1499)
+* [SCM synch rebase: if result is conflicted, it should be aborted](https://github.com/rundeck/rundeck/issues/1497)
+* [SCM: yaml whitespace error on re-import](https://github.com/rundeck/rundeck/issues/1496)
+* [SCM "Import remote changes"-cancel button leads to SCM configuration](https://github.com/rundeck/rundeck/issues/1494)
+* [SCM rebase gives a non-descriptive message](https://github.com/rundeck/rundeck/issues/1493)
+* [SCM imports reads as XML even though YAML has been chosen](https://github.com/rundeck/rundeck/issues/1492)
+* [SCM: File Path Template Parameter issue ](https://github.com/rundeck/rundeck/issues/1489)
+* [SCM: enabling git export and import, then exporting job changes, causes "import needed" status for the job](https://github.com/rundeck/rundeck/issues/1488)
+* [SCM: Job description with multiple lines can cause whitespace issues for git-diff](https://github.com/rundeck/rundeck/issues/1487)
+* [SCM: Merge result message is verbose](https://github.com/rundeck/rundeck/issues/1486)
+* [SCM Plugins: deleting a project should cleanup/remove loaded SCM plugins](https://github.com/rundeck/rundeck/issues/1484)
+* [Upgrading from 2.4.x to 2.6.x, all jobs have been set to "Enable Execution: no"](https://github.com/rundeck/rundeck/issues/1483)
+* [SCM export plugins: job change events leak to multiple projects](https://github.com/rundeck/rundeck/issues/1479)
+* [SCM: setup two projects with same git base dir causes issues](https://github.com/rundeck/rundeck/issues/1478)
+* [Upgrade to 2.6.0: Node selection defaults to "user has to explicitly select target nodes"](https://github.com/rundeck/rundeck/issues/1477)
+* [When disabling a crontab style schedule and restarting the rundeck service, the schedule is enabled again after service restart.](https://github.com/rundeck/rundeck/issues/1475)
+* [scm export commits yaml format in .xml extension](https://github.com/rundeck/rundeck/issues/1471)
+* [SCM HTTPS, unknown CA](https://github.com/rundeck/rundeck/issues/1469)
+* [Disable/Enable Schedule in Job Actions menu (Rundeck 2.6.0-1) ](https://github.com/rundeck/rundeck/issues/1468)
+* [problem closing file descriptors unloading plugins in rundeck](https://github.com/rundeck/rundeck/issues/1440)
+* [Deleting execution from api is not always working (random errors)](https://github.com/rundeck/rundeck/issues/1380)
+* [documentation needed: using the sudo password and ssh private key passphrase via storage facility for ssh](https://github.com/rundeck/rundeck/issues/1110)
+---
 
 Release 2.6.0
 ===========

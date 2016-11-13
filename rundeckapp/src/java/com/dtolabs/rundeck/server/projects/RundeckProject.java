@@ -14,71 +14,51 @@ import java.util.*;
  * Created by greg on 2/23/15.
  */
 public class RundeckProject implements IRundeckProject{
-    private String name;
     private ProjectManagerService projectService;
-    private IProjectNodes projectNodes;
-    private Authorization projectAuthorization;
-    private Date lastModifiedTime;
-    private IPropertyLookup lookup;
-    private IPropertyLookup projectLookup;
+    private IRundeckProjectConfig projectConfig;
+    private IProjectInfo info;
+    private IProjectNodesFactory nodesFactory;
 
     public RundeckProject(
-            final String name,
-            final IPropertyLookup lookup,
-            final IPropertyLookup projectLookup,
-            final ProjectManagerService projectService,
-            final Date lastModifiedTime
+            final IRundeckProjectConfig projectConfig,
+            final ProjectManagerService projectService
     )
     {
-        this.name = name;
-        this.setLookup(lookup);
-        this.setProjectLookup(projectLookup);
+        this.projectConfig=projectConfig;
         this.projectService = projectService;
-        this.setLastModifiedTime(lastModifiedTime);
 
     }
 
     public String getName(){
-        return name;
+        return projectConfig.getName();
     }
+
     public String getProperty(final String property) {
-        return getLookup().getProperty(property);
+        return projectConfig.getProperty(property);
     }
 
     @Override
     public List<Map<String, Object>> listResourceModelConfigurations() {
-        return projectNodes.listResourceModelConfigurations();
+        return getProjectNodes().listResourceModelConfigurations();
     }
 
     @Override
     public INodeSet getNodeSet() throws NodeFileParserException {
-        return projectNodes.getNodeSet();
+        return getProjectNodes().getNodeSet();
     }
 
     @Override
     public boolean hasProperty(final String key) {
-        return getProperties().containsKey(key);
+        return projectConfig.hasProperty(key);
     }
 
     @Override
     public Map<String, String> getProperties() {
-        HashMap<String, String> result = new HashMap<>();
-        if(null!= getLookup()){
-            for(Object key: getLookup().getPropertiesMap().keySet()) {
-                result.put(key.toString(), getLookup().getProperty(key.toString()));
-            }
-        }
-        return result;
+        return projectConfig.getProperties();
     }
     @Override
     public Map<String, String> getProjectProperties() {
-        HashMap<String, String> result = new HashMap<>();
-        if(null!= getProjectLookup()){
-            for(Object key: getProjectLookup().getPropertiesMap().keySet()) {
-                result.put(key.toString(), getProjectLookup().getProperty(key.toString()));
-            }
-        }
-        return result;
+        return projectConfig.getProjectProperties();
     }
 
     @Override
@@ -93,99 +73,96 @@ public class RundeckProject implements IRundeckProject{
 
     @Override
     public boolean existsFileResource(final String path) {
-        return projectService.existsProjectFileResource(name, path);
+        return projectService.existsProjectFileResource(getName(), path);
     }
 
     @Override
     public boolean existsDirResource(final String path) {
-        return projectService.existsProjectDirResource(name, path);
+        return projectService.existsProjectDirResource(getName(), path);
     }
 
     @Override
     public List<String> listDirPaths(final String path) {
-        return projectService.listProjectDirPaths(name, path);
+        return projectService.listProjectDirPaths(getName(), path);
     }
 
     @Override
     public boolean deleteFileResource(final String path) {
-        return projectService.deleteProjectFileResource(name, path);
+        return projectService.deleteProjectFileResource(getName(), path);
     }
 
     @Override
     public long storeFileResource(final String path, final InputStream input) throws IOException {
-        return projectService.writeProjectFileResource(name, path, input, new HashMap<String, String>())
+        return projectService.writeProjectFileResource(getName(), path, input, new HashMap<String, String>())
                              .getContents()
                              .getContentLength();
     }
 
     @Override
     public long loadFileResource(final String path, final OutputStream output) throws IOException {
-        return projectService.readProjectFileResource(name,path,output);
+        return projectService.readProjectFileResource(getName(),path,output);
     }
 
     @Override
     public Date getConfigLastModifiedTime() {
-        return getLastModifiedTime();
+        return projectConfig.getConfigLastModifiedTime();
     }
 
     @Override
     public boolean updateNodesResourceFile() throws UpdateUtils.UpdateException {
-        return projectNodes.updateNodesResourceFile(projectService.getNodesResourceFilePath(this));
+        return getProjectNodes().updateNodesResourceFile(projectService.getNodesResourceFilePath(this));
     }
 
     @Override
     public void updateNodesResourceFileFromUrl(final String providerURL, final String username, final String password)
             throws UpdateUtils.UpdateException
     {
-        projectNodes.updateNodesResourceFileFromUrl(providerURL, username, password,projectService.getNodesResourceFilePath(this));
+        getProjectNodes().updateNodesResourceFileFromUrl(providerURL, username, password,projectService.getNodesResourceFilePath(this));
     }
 
     @Override
     public void updateNodesResourceFile(final INodeSet nodeset) throws UpdateUtils.UpdateException {
-        projectNodes.updateNodesResourceFile(nodeset,projectService.getNodesResourceFilePath(this));
+        getProjectNodes().updateNodesResourceFile(nodeset,projectService.getNodesResourceFilePath(this));
     }
 
     public IProjectNodes getProjectNodes() {
-        return projectNodes;
-    }
-
-    public void setProjectNodes(final IProjectNodes projectNodes) {
-        this.projectNodes = projectNodes;
+        return getNodesFactory().getNodes(getName());
     }
 
     @Override
     public String toString() {
         return "RundeckProject{" +
-               "name='" + name + '\'' +
-               ", lastModifiedTime=" + getLastModifiedTime() +
+               "config='" + projectConfig + '\'' +
                '}';
     }
 
-    public IPropertyLookup getLookup() {
-        return lookup;
-    }
-
-    public void setLookup(final IPropertyLookup lookup) {
-        this.lookup = lookup;
-    }
-
-    public IPropertyLookup getProjectLookup() {
-        return projectLookup;
-    }
-
-    public void setProjectLookup(final IPropertyLookup projectLookup) {
-        this.projectLookup = projectLookup;
-    }
-
-    public Date getLastModifiedTime() {
-        return lastModifiedTime;
-    }
-
-    public void setLastModifiedTime(final Date lastModifiedTime) {
-        this.lastModifiedTime = lastModifiedTime;
-    }
 
     public Authorization getProjectAuthorization() {
-        return projectService.getProjectAuthorization(name);
+        return projectService.getProjectAuthorization(getName());
+    }
+
+    public IRundeckProjectConfig getProjectConfig() {
+        return projectConfig;
+    }
+
+    public void setProjectConfig(IRundeckProjectConfig projectConfig) {
+        this.projectConfig = projectConfig;
+    }
+
+    @Override
+    public IProjectInfo getInfo() {
+        return info;
+    }
+
+    public void setInfo(IProjectInfo info) {
+        this.info = info;
+    }
+
+    public IProjectNodesFactory getNodesFactory() {
+        return nodesFactory;
+    }
+
+    public void setNodesFactory(IProjectNodesFactory nodesFactory) {
+        this.nodesFactory = nodesFactory;
     }
 }

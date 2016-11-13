@@ -52,7 +52,27 @@ class UrlMappings {
         "/api/$api_version/job/$id/executions"(controller: 'scheduledExecution') {
             action = [GET: 'apiJobExecutions', DELETE: 'apiJobExecutionsDelete', POST: 'apiJobRun']
         }
+
+        "/api/$api_version/job/$id/scm/$integration/status"(controller: 'scm', action: 'apiJobStatus')
+        "/api/$api_version/job/$id/scm/$integration/diff"(controller: 'scm', action: 'apiJobDiff')
+        "/api/$api_version/job/$id/scm/$integration/action/$actionId/input"(controller: 'scm', action: 'apiJobActionInput')
+        "/api/$api_version/job/$id/scm/$integration/action/$actionId"(controller: 'scm', action: 'apiJobActionPerform')
+
         "/api/$api_version/jobs/delete"(controller: 'scheduledExecution', action: 'apiJobDeleteBulk')
+        "/api/$api_version/jobs/schedule/enable"(controller: 'scheduledExecution',action: 'apiFlipScheduleEnabledBulk') {
+            status = true
+        }
+        "/api/$api_version/jobs/schedule/disable"(controller: 'scheduledExecution',action: 'apiFlipScheduleEnabledBulk'){
+            status = false
+        }
+        "/api/$api_version/jobs/execution/enable"(controller: 'scheduledExecution',action: 'apiFlipExecutionEnabledBulk') {
+            status = true
+        }
+        "/api/$api_version/jobs/execution/disable"(controller: 'scheduledExecution',action: 'apiFlipExecutionEnabledBulk'){
+            status = false
+        }
+
+
         "/api/$api_version/project/$project/executions/running"(controller: 'menu', action: 'apiExecutionsRunningv14')
         "/api/$api_version/project/$project/executions"(controller: 'execution', action: 'apiExecutionsQueryv14')
         "/api/$api_version/project/$project/jobs/export"(controller: 'menu', action: 'apiJobsExportv14')
@@ -89,8 +109,24 @@ class UrlMappings {
         "/api/$api_version/project/$project/run/url"(controller: 'scheduledExecution', action: 'apiRunScriptUrl14')
         "/api/$api_version/project/$project/history"(controller: 'reports', action: 'apiHistoryv14')
 
+        "/api/$api_version/project/$project/scm/$integration/plugins"(controller: 'scm', action: 'apiPlugins')
+        "/api/$api_version/project/$project/scm/$integration/plugin/$type/input"(controller: 'scm', action: 'apiPluginInput')
+        "/api/$api_version/project/$project/scm/$integration/plugin/$type/setup"(controller: 'scm', action: 'apiProjectSetup')
+        "/api/$api_version/project/$project/scm/$integration/plugin/$type/enable"(controller: 'scm', action: 'apiProjectEnable')
+        "/api/$api_version/project/$project/scm/$integration/plugin/$type/disable"(controller: 'scm', action: 'apiProjectDisable')
+        "/api/$api_version/project/$project/scm/$integration/status"(controller: 'scm', action: 'apiProjectStatus')
+        "/api/$api_version/project/$project/scm/$integration/config"(controller: 'scm', action: 'apiProjectConfig')
+        "/api/$api_version/project/$project/scm/$integration/action/$actionId/input"(controller: 'scm', action: 'apiProjectActionInput')
+        "/api/$api_version/project/$project/scm/$integration/action/$actionId"(controller: 'scm', action: 'apiProjectActionPerform')
+
         "/api/$api_version/projects"(controller: 'project'){
             action = [GET: 'apiProjectList', POST:'apiProjectCreate']
+        }
+        "/api/$api_version/scheduler/jobs"(controller: 'menu', action: 'apiSchedulerListJobs'){
+            currentServer=true
+        }
+        "/api/$api_version/scheduler/server/$uuid/jobs"(controller: 'menu', action: 'apiSchedulerListJobs'){
+            currentServer=false
         }
         "/api/$api_version/scheduler/takeover"(controller: 'scheduledExecution', action: 'apiJobClusterTakeoverSchedule')
 
@@ -111,6 +147,9 @@ class UrlMappings {
         ///////////////
 
         "/api/$api_version/system/info"(controller: 'api', action: 'apiSystemInfo')
+        "/api/$api_version/system/logstorage"(controller: 'menu', action: 'apiLogstorageInfo')
+        "/api/$api_version/system/logstorage/incomplete/resume"(controller: 'menu', action: 'apiResumeIncompleteLogstorage')
+        "/api/$api_version/system/logstorage/incomplete"(controller: 'menu', action: 'apiLogstorageListIncompleteExecutions')
         "/api/$api_version/system/executions/enable"(controller: 'execution', action: 'apiExecutionModeActive')
         "/api/$api_version/system/executions/disable"(controller: 'execution', action: 'apiExecutionModePassive')
         "/api/$api_version/system/acl/$path**"(controller: 'framework',action: 'apiSystemAcls')

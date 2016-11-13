@@ -10,6 +10,7 @@ import com.dtolabs.rundeck.plugins.scm.ScmCommitInfo
 import com.dtolabs.rundeck.plugins.scm.ScmExportPlugin
 import com.dtolabs.rundeck.plugins.scm.ScmExportPluginFactory
 import com.dtolabs.rundeck.plugins.scm.ScmExportResult
+import com.dtolabs.rundeck.plugins.scm.ScmExportSynchState
 import com.dtolabs.rundeck.plugins.scm.ScmImportPlugin
 import com.dtolabs.rundeck.plugins.scm.ScmImportPluginFactory
 import com.dtolabs.rundeck.plugins.scm.ScmOperationContext
@@ -160,18 +161,20 @@ class ScmServiceSpec extends Specification {
         ScmPluginConfigData config2 = Mock(ScmPluginConfigData)
 
         when:
-        service.removeAllPluginConfiguration('test1', null)
+        service.removeAllPluginConfiguration('test1')
         then:
-        1 * service.pluginConfigService.loadScmConfig(
+        service.pluginConfigService.loadScmConfig(
                 'test1',
                 "etc/scm-import.properties",
                 'scm.import'
         ) >> config
-        1 * service.pluginConfigService.loadScmConfig(
+        service.pluginConfigService.loadScmConfig(
                 'test1',
                 "etc/scm-export.properties",
                 'scm.export'
         ) >> config2
+        config.getType()>>'scm.import'
+        config2.getType()>>'scm.export'
         1 * config.setEnabled(false)
         1 * config2.setEnabled(false)
         1 * service.pluginConfigService.storeConfig(config, 'test1', "etc/scm-import.properties")
@@ -321,6 +324,95 @@ class ScmServiceSpec extends Specification {
         ScmService.EXPORT | _
     }
 
+
+    def "export project status basic"() {
+        given:
+        def ctx = Mock(ScmOperationContext) {
+            getFrameworkProject() >> 'testProject'
+        }
+        def config = [:]
+
+        ScmExportPluginFactory exportFactory = Mock(ScmExportPluginFactory)
+        ScmExportPlugin plugin = Mock(ScmExportPlugin)
+
+        service.pluginService = Mock(PluginService)
+        service.pluginConfigService = Mock(PluginConfigService)
+        service.jobEventsService = Mock(JobEventsService)
+        service.frameworkService = Mock(FrameworkService)
+        service.storageService = Mock(StorageService)
+
+        def validated = new ValidatedPlugin(valid: true)
+
+        when:
+        def result = service.exportPluginStatus(Mock(UserAndRolesAuthContext),'testProject')
+
+        then:
+        1 * service.pluginConfigService.loadScmConfig('testProject', 'etc/scm-export.properties', 'scm.export')>>Mock(ScmPluginConfigData){
+            1 * getEnabled()>>true
+            1 * getSetting('username') >> 'testuser'
+            1 * getSettingList('roles') >> ['arole']
+            getType()>>'atype'
+            getConfig()>>config
+        }
+        service.frameworkService.getAuthContextForUserAndRoles(_,_)>>Mock(UserAndRolesAuthContext){
+            getUsername()>>'testuser'
+            getRoles()>>new HashSet<String>(['arole'])
+        }
+        1 * service.frameworkService.getFrameworkPropertyResolver(*_)
+        1 * service.pluginService.validatePlugin(*_) >> validated
+        1 * service.pluginService.getPlugin('atype', _) >> exportFactory
+        1 * exportFactory.createPlugin(_, config) >> plugin
+        1 * service.jobEventsService.addListenerForProject(_, 'testProject')
+        1 * plugin.getStatus(_)>>Mock(ScmExportSynchState)
+
+        result != null
+    }
+
+
+    def "export project status exception"() {
+        given:
+        def ctx = Mock(ScmOperationContext) {
+            getFrameworkProject() >> 'testProject'
+        }
+        def config = [:]
+
+        ScmExportPluginFactory exportFactory = Mock(ScmExportPluginFactory)
+        ScmExportPlugin plugin = Mock(ScmExportPlugin)
+
+        service.pluginService = Mock(PluginService)
+        service.pluginConfigService = Mock(PluginConfigService)
+        service.jobEventsService = Mock(JobEventsService)
+        service.frameworkService = Mock(FrameworkService)
+        service.storageService = Mock(StorageService)
+
+        def validated = new ValidatedPlugin(valid: true)
+
+        when:
+        def result = service.exportPluginStatus(Mock(UserAndRolesAuthContext),'testProject')
+
+        then:
+        1 * service.pluginConfigService.loadScmConfig('testProject', 'etc/scm-export.properties', 'scm.export')>>Mock(ScmPluginConfigData){
+            1 * getEnabled()>>true
+            1 * getSetting('username') >> 'testuser'
+            1 * getSettingList('roles') >> ['arole']
+            getType()>>'atype'
+            getConfig()>>config
+        }
+        service.frameworkService.getAuthContextForUserAndRoles(_,_)>>Mock(UserAndRolesAuthContext){
+            getUsername()>>'testuser'
+            getRoles()>>new HashSet<String>(['arole'])
+        }
+        1 * service.frameworkService.getFrameworkPropertyResolver(*_)
+        1 * service.pluginService.validatePlugin(*_) >> validated
+        1 * service.pluginService.getPlugin('atype', _) >> exportFactory
+        1 * exportFactory.createPlugin(_, config) >> plugin
+        1 * service.jobEventsService.addListenerForProject(_, 'testProject')
+        1 * plugin.getStatus(_)>>{
+            throw new RuntimeException("get status failed")
+        }
+        result == null
+    }
+
     def "perform export plugin action should store commit metadata into job import metadata"() {
         given:
         service.jobMetadataService = Mock(JobMetadataService)
@@ -329,6 +421,7 @@ class ScmServiceSpec extends Specification {
 
         ScmExportPlugin plugin = Mock(ScmExportPlugin)
         service.loadedExportPlugins['test1'] = plugin
+        service.initedProjects.add('test1')
 
         def input = [:]
         def auth = Mock(UserAndRolesAuthContext) {
@@ -367,10 +460,11 @@ class ScmServiceSpec extends Specification {
         result.commitId == 'a-commit-id'
     }
 
-    def "initialize should read correct configs"() {
+    def "initialize should read correct configs when initDeferred is false"() {
         given:
         service.pluginConfigService = Mock(PluginConfigService)
         service.frameworkService = Mock(FrameworkService)
+        grailsApplication.config.rundeck.scm.startup.initDeferred=false
         when:
         service.initialize()
         then:
@@ -402,6 +496,7 @@ class ScmServiceSpec extends Specification {
         service.pluginService = Mock(PluginService)
         service.jobEventsService = Mock(JobEventsService)
         def validated = new ValidatedPlugin(valid: true)
+        grailsApplication.config.rundeck.scm.startup.initDeferred=false
 
         when:
         service.initialize()
@@ -419,5 +514,30 @@ class ScmServiceSpec extends Specification {
         1 * service.jobEventsService.addListenerForProject(_, 'projectA')
 
         1 * service.pluginConfigService.loadScmConfig('projectA', 'etc/scm-export.properties', 'scm.export') >> null
+    }
+
+    def "lookup user profile, no User found"() {
+        when:
+        def info = service.lookupUserInfo('bob')
+
+        then:
+        info.userName == 'bob'
+        info.firstName == null
+        info.lastName == null
+        info.email == null
+    }
+
+    def "lookup user profile, with User found"() {
+        given:
+        new User(login: 'bob', firstName: 'a', lastName: 'b', email: 'test@test.com').save()
+
+        when:
+        def info = service.lookupUserInfo('bob')
+
+        then:
+        info.userName == 'bob'
+        info.firstName == 'a'
+        info.lastName == 'b'
+        info.email == 'test@test.com'
     }
 }

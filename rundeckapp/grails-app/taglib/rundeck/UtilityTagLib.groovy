@@ -1,6 +1,7 @@
 package rundeck
 
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolverFactory
+import grails.util.Environment
 import org.rundeck.web.infosec.HMacSynchronizerTokensHolder
 import org.rundeck.web.infosec.HMacSynchronizerTokensManager
 import org.codehaus.groovy.grails.web.servlet.mvc.SynchronizerTokensHolder
@@ -14,7 +15,7 @@ class UtilityTagLib{
     def static  daysofweekkey = [Calendar.SUNDAY,Calendar.MONDAY,Calendar.TUESDAY,Calendar.WEDNESDAY,Calendar.THURSDAY,Calendar.FRIDAY,Calendar.SATURDAY];
     def public static daysofweekord = ScheduledExecution.daysofweeklist;
     def public static monthsofyearord = ScheduledExecution.monthsofyearlist;
-	static returnObjectForTags = ['nodeStatusColorStyle','nodeStatusColorCss','executionMode','appTitle','rkey','w3cDateValue','sortGroupKeys','helpLinkUrl','helpLinkParams','parseOptsFromString','relativeDateString','enc','textFirstLine','textRemainingLines']
+	static returnObjectForTags = ['nodeStatusColorStyle','nodeStatusColorCss','logStorageEnabled','executionMode','appTitle','rkey','w3cDateValue','sortGroupKeys','helpLinkUrl','helpLinkParams','parseOptsFromString','relativeDateString','enc','textFirstLine','textRemainingLines']
 
     private static Random rand=new java.util.Random()
     def HMacSynchronizerTokensManager hMacSynchronizerTokensManager
@@ -65,6 +66,15 @@ class UtilityTagLib{
             attrs.text=body()
         }
         out<<render(template:"/common/expander",model:attrs)
+    }
+    /**
+    * Render collapser component
+     */
+    def collapser={attrs,body->
+        if(body && !attrs.text){
+            attrs.text=body()
+        }
+        out<<render(template:"/common/collapser",model:attrs)
     }
 
     def dayOfWeek = { attrs, body ->
@@ -892,6 +902,14 @@ class UtilityTagLib{
             out<<body()
         }
     }
+    def logStorageEnabled={attrs,body->
+        configurationService.getString('execution.logs.fileStoragePlugin',null)!=null
+    }
+    def ifLogStorageEnabled={attrs,body->
+        if(logStorageEnabled(attrs,body)){
+            out<<body()
+        }
+    }
     static final Set<String> glyphiconSet=Collections.unmodifiableSet(
             qw('''asterisk
 plus
@@ -1172,7 +1190,7 @@ menu-up''')
     def nodeBadgeIcons={attrs,body->
         String found = attrs.node?.attributes[UI_BADGES_GLYPHICON]
         if(found){
-            found.split(/,\s+/).collect{
+            found.split(/,\s*/).collect{
                 glyphiconName(it)
             }.findAll{it}.each{
                 out<<"<i class='glyphicon glyphicon-${it}'></i>"
@@ -1471,6 +1489,10 @@ ansi-bg-default'''))
         }
         if (glyphiconSet.contains(attrs.name)) {
             out << "<i class=\"glyphicon glyphicon-${attrs.name}\"></i>"
+        }else{
+            if(Environment.current==Environment.DEVELOPMENT) {
+                throw new Exception("icon name not recognized: ${attrs.name}")
+            }
         }
     }
 }

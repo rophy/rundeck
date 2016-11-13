@@ -5,7 +5,7 @@
   Time: 3:29 PM
 --%>
 
-<%@ page contentType="text/html;charset=UTF-8" %>
+<%@ page import="com.dtolabs.rundeck.core.plugins.configuration.PropertyScope" contentType="text/html;charset=UTF-8" %>
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
@@ -20,16 +20,6 @@
             $$('input').each(function (elem) {
                 if (elem.type == 'text') {
                     elem.observe('keypress', noenter);
-                }
-            });
-            jQuery('#storagebrowse').find('.obs-storagebrowse-select').on('click', function (evt) {
-                if (jQuery(evt.delegateTarget).hasClass('active')) {
-                    var storageBrowse = jQuery('#storagebrowse').data('storageBrowser');
-                    var storageBrowseTarget = storageBrowse.fieldTarget();
-                    if (storageBrowse && storageBrowse.selectedPath()) {
-                        jQuery(storageBrowseTarget).val(storageBrowse.selectedPath());
-                        storageBrowse.selectedPath(null);
-                    }
                 }
             });
         }
@@ -71,20 +61,17 @@
                     </div>
 
                     <div class="list-group-item">
-                        <g:each in="${properties}" var="prop">
+                        <g:if test="${properties}">
+                            <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                                    properties:properties,
+                                    report:report,
+                                    values:config,
+                                    fieldnamePrefix:'config.',
+                                    origfieldnamePrefix:'orig.' ,
+                                    allowedScope: PropertyScope.Project
+                            ]}"/>
+                        </g:if>
 
-                            <g:if test="${!prop.scope || prop.scope.isProjectLevel() || prop.scope.isUnspecified()}">
-                                <g:render
-                                        template="/framework/pluginConfigPropertyFormField"
-                                        model="${[prop         : prop,
-                                                  prefix       : 'test',
-                                                  error        : report?.errors ? report?.errors[prop.name] : null,
-                                                  values       : config,
-                                                  fieldname    : 'config.' + prop.name,
-                                                  origfieldname: 'orig.' + prop.name
-                                        ]}"/>
-                            </g:if>
-                        </g:each>
                     </div>
                 </div>
 

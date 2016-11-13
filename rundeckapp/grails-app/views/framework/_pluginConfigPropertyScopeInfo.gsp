@@ -2,12 +2,13 @@
 <g:set var="scopeinfo" value="${g.rkey()}"/>
 
 <g:if test="${prop.renderingOptions?.(StringRenderingConstants.DISPLAY_TYPE_KEY) in [StringRenderingConstants.DisplayType.PASSWORD, 'PASSWORD']}">
-    <g:set var="propValue" value="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"/>
+    <g:set var="propValue" value="••••••••"/>
 </g:if>
 <g:else>
     <g:set var="propValue" value="${prop.defaultValue ?: 'value'}"/>
 </g:else>
 
+<g:unless test="${outofscopeHidden}">
 <g:unless test="${outofscopeShown}">
     <g:expander key="${scopeinfo}">Admin configuration info</g:expander>
 </g:unless>
@@ -61,3 +62,4 @@
         </g:if>
     </div>
 </div>
+</g:unless>

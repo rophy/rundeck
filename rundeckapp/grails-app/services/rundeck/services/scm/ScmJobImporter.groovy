@@ -48,17 +48,17 @@ class ScmJobImporter implements ContextJobImporter {
             )
         }
 
-        importJobset(context, parseresult.jobset[0], importMetadata)
+        importJob(context, parseresult.jobset[0], importMetadata)
     }
 
-    private ImportResult importJobset(
+    private ImportResult importJob(
             final ScmOperationContext context,
             ScheduledExecution jobData,
             final Map importMetadata
     )
     {
 
-        jobData*.project = context.frameworkProject
+        jobData.project = context.frameworkProject
         def loadresults = scheduledExecutionService.loadJobs(
                 [jobData],
                 'update',
@@ -66,6 +66,8 @@ class ScmJobImporter implements ContextJobImporter {
                 [user: context.userInfo.userName, method: 'scm-import'],
                 context.authContext
         )
+        scheduledExecutionService.issueJobChangeEvents(loadresults.jobChangeEvents)
+
         loadresults.jobs.each { ScheduledExecution job ->
             jobMetadataService.setJobPluginMeta(job, 'scm-import', [version: job.version, pluginMeta: importMetadata])
         }
@@ -89,12 +91,12 @@ class ScmJobImporter implements ContextJobImporter {
             final Map importMetadata
     )
     {
-        List<Map> jobset
+        List<ScheduledExecution> jobset
         try {
             jobset = JobsYAMLCodec.createJobs([input])
         } catch (Throwable e) {
             return ImporterResult.fail("Failed to construct job definition map: " + e.message)
         }
-        importJobset(context, jobset[0], importMetadata)
+        importJob(context, jobset[0], importMetadata)
     }
 }

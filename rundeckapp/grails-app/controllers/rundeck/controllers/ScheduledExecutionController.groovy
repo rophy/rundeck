@@ -11,6 +11,7 @@ import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
 import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.common.INodeEntry
 import com.dtolabs.rundeck.core.utils.NodeSet
+import com.dtolabs.rundeck.core.utils.OptsUtil
 import com.dtolabs.rundeck.server.authorization.AuthConstants
 import grails.converters.JSON
 import groovy.xml.MarkupBuilder
@@ -91,6 +92,12 @@ class ScheduledExecutionController  extends ControllerBase{
     def static allowedMethods = [
             delete: ['POST','GET'],
             deleteBulk: 'POST',
+            flipExecutionDisabledBulk:'POST',
+            flipExecutionEnabledBulk:'POST',
+            flipScheduleDisabledBulk:'POST',
+            flipScheduleEnabledBulk:'POST',
+            flipScheduleEnabled:'POST',
+            flipExecutionEnabled: 'POST',
             runJobInline: 'POST',
             runJobNow: 'POST',
             runAdhocInline: 'POST',
@@ -99,6 +106,10 @@ class ScheduledExecutionController  extends ControllerBase{
             update: 'POST',
             upload: 'GET',
             uploadPost: ['POST'],
+            apiFlipExecutionEnabled: 'POST',
+            apiFlipExecutionEnabledBulk: 'POST',
+            apiFlipScheduleEnabled: 'POST',
+            apiFlipScheduleEnabledBulk: 'POST',
             apiJobCreateSingle: 'POST',
             apiJobRun: ['POST','GET'],
             apiJobsImport: 'POST',
@@ -227,20 +238,11 @@ class ScheduledExecutionController  extends ControllerBase{
         }
     }
 
-    def detailFragment = {
-        log.debug("ScheduledExecutionController: show : params: " + params)
-        def crontab = [:]
+    private def jobDetailData() {
         Framework framework = frameworkService.getRundeckFramework()
         def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID( params.id )
-        if(notFoundResponse(scheduledExecution,'Job',params.id)){
-            return
-        }
-        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
-        if(unauthorizedResponse(frameworkService.authorizeProjectJobAll(authContext, scheduledExecution,
-                [AuthConstants.ACTION_READ], scheduledExecution.project), AuthConstants.ACTION_READ,'Job',params.id)){
-            return
-        }
-        crontab = scheduledExecution.timeAndDateAsBooleanMap()
+
+        def crontab = scheduledExecution.timeAndDateAsBooleanMap()
         //list executions using query params and pagination params
 
         def executions=Execution.findAllByScheduledExecution(scheduledExecution,[offset: params.offset?params.offset:0, max: params.max?params.max:10, sort:'dateStarted', order:'desc'])
@@ -253,7 +255,7 @@ class ScheduledExecutionController  extends ControllerBase{
             remoteClusterNodeUUID = scheduledExecution.serverNodeUUID
         }
 
-        return render(view:'jobDetailFragment',model: [scheduledExecution:scheduledExecution, crontab:crontab, params:params,
+        [scheduledExecution:scheduledExecution, crontab:crontab, params:params,
             executions:executions,
             total:total,
             nextExecution:scheduledExecutionService.nextExecutionTime(scheduledExecution),
@@ -261,7 +263,53 @@ class ScheduledExecutionController  extends ControllerBase{
             max: params.max?params.max:10,
             notificationPlugins: notificationService.listNotificationPlugins(),
             orchestratorPlugins: orchestratorPluginService.listOrchestratorPlugins(),
-            offset:params.offset?params.offset:0])
+            offset:params.offset?params.offset:0]
+    }
+    def detailFragment () {
+        log.debug("ScheduledExecutionController: detailFragment : params: " + params)
+        Framework framework = frameworkService.getRundeckFramework()
+        def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID( params.id )
+        if(notFoundResponse(scheduledExecution,'Job',params.id)){
+            return
+        }
+        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
+        if(unauthorizedResponse(frameworkService.authorizeProjectJobAll(authContext, scheduledExecution,
+                [AuthConstants.ACTION_READ], scheduledExecution.project), AuthConstants.ACTION_READ,'Job',params.id)){
+            return
+        }
+        def model=jobDetailData()
+
+        return render(view:'jobDetailFragment',model: model)
+    }
+    def detailFragmentAjax () {
+        log.debug("ScheduledExecutionController: detailFragmentAjax : params: " + params)
+        def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID( params.id )
+        if(notFoundResponse(scheduledExecution,'Job',params.id)){
+            return
+        }
+        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
+        if(unauthorizedResponse(frameworkService.authorizeProjectJobAll(authContext, scheduledExecution,
+                [AuthConstants.ACTION_READ], scheduledExecution.project), AuthConstants.ACTION_READ,'Job',params.id)){
+            return
+        }
+        def model=jobDetailData()
+        def se = model.scheduledExecution
+        render(contentType: 'application/json') {
+            total = model.total
+            nextExecution = model.nextExecution
+            max = model.max
+            job(
+                    id: se.extid,
+                    name: (se.jobName),
+                    group: (se.groupPath),
+                    project: (se.project),
+                    description: (se.description),
+                    href: apiService.apiHrefForJob(se),
+                    permalink: apiService.guiHrefForJob(se),
+                    filter: se.filter?:'',
+                    doNodeDispatch: se.doNodedispatch
+            )
+        }
     }
     def show = {
         log.debug("ScheduledExecutionController: show : params: " + params)
@@ -289,8 +337,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def total = Execution.countByScheduledExecution(scheduledExecution)
 
         def remoteClusterNodeUUID=null
-        if (scheduledExecution.scheduled && frameworkService.isClusterModeEnabled()
-                && scheduledExecution.serverNodeUUID != frameworkService.getServerUUID()) {
+        if (scheduledExecution.scheduled && frameworkService.isClusterModeEnabled()) {
             remoteClusterNodeUUID = scheduledExecution.serverNodeUUID
         }
 
@@ -302,6 +349,7 @@ class ScheduledExecutionController  extends ControllerBase{
                 total: total,
                 nextExecution: scheduledExecutionService.nextExecutionTime(scheduledExecution),
                 remoteClusterNodeUUID: remoteClusterNodeUUID,
+                serverNodeUUID: frameworkService.isClusterModeEnabled()?frameworkService.serverUUID:null,
                 notificationPlugins: notificationService.listNotificationPlugins(),
 				orchestratorPlugins: orchestratorPluginService.listOrchestratorPlugins(),
                 max: params.int('max') ?: 10,
@@ -402,7 +450,9 @@ class ScheduledExecutionController  extends ControllerBase{
             def values=[]
             if (opt.realValuesUrl) {
                 //load expand variables in URL source
-                String srcUrl = expandUrl(opt, opt.realValuesUrl.toExternalForm(), scheduledExecution,params.extra?.option)
+
+                def realUrl = opt.realValuesUrl.toExternalForm()
+                String srcUrl = expandUrl(opt, realUrl, scheduledExecution, params.extra?.option,realUrl.matches(/(?i)^https?:.*$/))
                 String cleanUrl=srcUrl.replaceAll("^(https?://)([^:@/]+):[^@/]*@",'$1$2:****@');
                 def remoteResult=[:]
                 def result=null
@@ -616,18 +666,28 @@ class ScheduledExecutionController  extends ControllerBase{
      * ${job.PROPERTY} and ${option.PROPERTY}.  available properties are
      * limited
      */
-    protected String expandUrl(Option opt, String url, ScheduledExecution scheduledExecution,selectedoptsmap=[:]) {
+    protected String expandUrl(Option opt, String url, ScheduledExecution scheduledExecution,selectedoptsmap=[:],boolean isHttp=true) {
         def invalid = []
-        def extraJobProps=[
-            'user.name': (session?.user?: "anonymous"),
-            'rundeck.nodename':frameworkService.getFrameworkNodeName(),
-            'rundeck.serverUUID':frameworkService.serverUUID?:''
+        def rundeckProps=[
+                'nodename':frameworkService.getFrameworkNodeName(),
+                'serverUUID':frameworkService.serverUUID?:''
         ]
+        if(!isHttp) {
+            rundeckProps.basedir= frameworkService.getRundeckBase()
+        }
+        def extraJobProps=[
+                'user.name': (session?.user?: "anonymous"),
+        ]
+        extraJobProps.putAll rundeckProps.collectEntries {['rundeck.'+it.key,it.value]}
+
         def replacement= { Object[] group ->
             if (group[2] == 'job' && jobprops[group[3]] && scheduledExecution.properties.containsKey(jobprops[group[3]])) {
                 scheduledExecution.properties.get(jobprops[group[3]]).toString()
             } else if (group[2] == 'job' && null != extraJobProps[group[3]]) {
                 def value = extraJobProps[group[3]]
+                value.toString()
+            }else if (group[2] == 'rundeck' && null != rundeckProps[group[3]]) {
+                def value = rundeckProps[group[3]]
                 value.toString()
             } else if (group[2] == 'option' && optprops[group[3]] && opt.properties.containsKey(optprops[group[3]])) {
                 opt.properties.get(optprops[group[3]]).toString()
@@ -649,9 +709,12 @@ class ScheduledExecutionController  extends ControllerBase{
         def codecs=['URIComponent','URL']
         def result=[]
         arr.eachWithIndex { String entry, int i ->
-            result<<entry.replaceAll(/(\$\{(job|option)\.([^}]+?(\.value)?)\})/) { Object[] group ->
+            result<<entry.replaceAll(/(\$\{(job|option|rundeck)\.([^}]+?(\.value)?)\})/) { Object[] group ->
                 def val = replacement(group)
                  if (null != val) {
+                     if(!isHttp){
+                         return val
+                     }
                      val."encodeAs${codecs[i]}"()
                  } else {
                      invalid << group[0]
@@ -824,58 +887,89 @@ class ScheduledExecutionController  extends ControllerBase{
     }
 
     def flipScheduleEnabled() {
+        withForm{
         if (!params.id) {
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST)
             return renderErrorView(g.message(code: 'api.error.parameter.required', args: ['id']))
         }
 
         def jobid = params.id
-        def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID(jobid)
-        if (notFoundResponse(scheduledExecution, 'Job', params.id)) {
-            return
+
+            def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID(jobid)
+            if (notFoundResponse(scheduledExecution, 'Job', params.id)) {
+                return
+            }
+
+            Framework framework = frameworkService.getRundeckFramework()
+            UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
+                    session.subject,
+                    scheduledExecution.project
+            )
+            def changeinfo = [method: 'update', change: 'modify', user: session.user]
+
+            //pass session-stored edit state in params map
+            transferSessionEditState(session, params, params.id)
+
+            String roleList = request.subject.getPrincipals(Group.class).collect { it.name }.join(",")
+
+            def payload = [id: params.id, scheduleEnabled: params.scheduleEnabled]
+            def result = scheduledExecutionService._doUpdateExecutionFlags(payload, session.user, roleList, framework, authContext, changeinfo)
+            if(!result.success){
+                flash.error=result.message
+            }
+            if(params.returnToJob=='true'){
+                return redirect(controller: 'scheduledExecution', action: 'show', params: [project: params.project,id:scheduledExecution.extid])
+            }
+            redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
+
+        }.invalidToken{
+            response.status = HttpServletResponse.SC_BAD_REQUEST
+            request.errorCode = 'request.error.invalidtoken.message'
+            return renderErrorView([:])
         }
-
-        Framework framework = frameworkService.getRundeckFramework()
-        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
-                session.subject,
-                scheduledExecution.project
-        )
-        def changeinfo = [method: 'update', change: 'modify', user: session.user]
-
-        //pass session-stored edit state in params map
-        transferSessionEditState(session, params, params.id)
-
-
-        def result = scheduledExecutionService._doupdate(params, authContext, changeinfo)
-
-        redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
     }
 
     def flipExecutionEnabled() {
-        if (!params.id) {
-            response.setStatus(HttpServletResponse.SC_BAD_REQUEST)
-            return renderErrorView(g.message(code: 'api.error.parameter.required', args: ['id']))
+        withForm{
+
+            if (!params.id) {
+                response.setStatus(HttpServletResponse.SC_BAD_REQUEST)
+                return renderErrorView(g.message(code: 'api.error.parameter.required', args: ['id']))
+            }
+
+            def jobid = params.id
+            def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID(jobid)
+            if (notFoundResponse(scheduledExecution, 'Job', params.id)) {
+                return
+            }
+
+            Framework framework = frameworkService.getRundeckFramework()
+            UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
+                    session.subject,
+                    scheduledExecution.project
+            )
+            def changeinfo = [method: 'update', change: 'modify', user: authContext.username]
+
+            //pass session-stored edit state in params map
+            transferSessionEditState(session, params, params.id)
+
+            String roleList = request.subject.getPrincipals(Group.class).collect { it.name }.join(",")
+
+            def payload = [id: params.id, executionEnabled: params.executionEnabled]
+            def result = scheduledExecutionService._doUpdateExecutionFlags(payload, session.user, roleList, framework, authContext, changeinfo)
+            if(!result.success){
+                flash.error=result.message
+            }
+            if(params.returnToJob=='true'){
+                return redirect(controller: 'scheduledExecution', action: 'show', params: [project: params.project,id:scheduledExecution.extid])
+            }
+            redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
+
+        }.invalidToken{
+            response.status = HttpServletResponse.SC_BAD_REQUEST
+            request.errorCode = 'request.error.invalidtoken.message'
+            return renderErrorView([:])
         }
-
-        def jobid = params.id
-        def ScheduledExecution scheduledExecution = scheduledExecutionService.getByIDorUUID(jobid)
-        if (notFoundResponse(scheduledExecution, 'Job', params.id)) {
-            return
-        }
-
-        Framework framework = frameworkService.getRundeckFramework()
-        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(
-                session.subject,
-                scheduledExecution.project
-        )
-        def changeinfo = [method: 'update', change: 'modify', user: authContext.username]
-
-        //pass session-stored edit state in params map
-        transferSessionEditState(session, params, params.id)
-
-        def result = scheduledExecutionService._doupdate(params, authContext, changeinfo)
-
-        redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
     }
 
     def apiFlipExecutionEnabled() {
@@ -1028,7 +1122,7 @@ class ScheduledExecutionController  extends ControllerBase{
                     return renderErrorView(result.error.message)
                 } else {
                     def project = result.success.job ? result.success.job.project : params.project
-                    flash.bulkDeleteResult = [success: [result.success]]
+                    flash.bulkJobResult = [success: [result.success]]
                     redirect(controller: 'menu', action: 'jobs', params: [project: project])
                 }
             }.invalidToken {
@@ -1042,12 +1136,110 @@ class ScheduledExecutionController  extends ControllerBase{
 
     }
     /**
+     * Enable execution for a set of jobs.
+     * Only allowed via POST http method
+     */
+    def flipExecutionEnabledBulk (ApiBulkJobDeleteRequest deleteRequest) {
+        log.debug("ScheduledExecutionController: flipExecutionEnabledBulk : params: " + params)
+        return handleFormFlipJobFlagBulk(deleteRequest, 'flipExecutionEnabledBulk', [executionEnabled: true], 'api.success.job.execution.enabled')
+    }
+
+    private def handleFormFlipJobFlagBulk(ApiBulkJobDeleteRequest deleteRequest, String methodName, Map flags, String successCode) {
+        if (deleteRequest.hasErrors()) {
+            flash.bulkJobResult = [success: false, errors: deleteRequest.errors]
+            return redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
+        }
+        withForm {
+            if (!params.ids && !params.idlist) {
+                flash.error = g.message(code: 'ScheduledExecutionController.bulkUpdate.empty')
+                return redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
+            }
+            flash.bulkJobResult = performFlipJobFlagBulk(deleteRequest,methodName,flags, successCode)
+            redirect(controller: 'menu', action: 'jobs', params: [project: params.project])
+        }.invalidToken {
+            response.status = HttpServletResponse.SC_BAD_REQUEST
+            request.errorCode = 'request.error.invalidtoken.message'
+            return renderErrorView([:])
+        }
+    }
+
+    private def performFlipJobFlagBulk(ApiBulkJobDeleteRequest deleteRequest,String methodName,Map flags, String successCode) {
+
+        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
+        def ids = deleteRequest.generateIdSet()
+
+        def successful = []
+        def errs = []
+        def changeinfo = [method: methodName, change: 'modify', user: authContext.username]
+        def framework = frameworkService.getRundeckFramework()
+        ids.sort().each { jobid ->
+
+            def result = scheduledExecutionService._doUpdateExecutionFlags(
+                    [id: jobid] + flags,
+                    authContext.username,
+                    authContext.roles.join(','),
+                    framework,
+                    authContext,
+                    changeinfo
+            )
+            if (!result.success) {
+                if (result.unauthorized) {
+                    errs << [id       : jobid,
+                             errorCode: result.errorCode,
+                             message  : result.message ?:
+                                     g.message(code: result.errorCode, args: ['Job', "{{Job " + jobid + "}}"])
+                    ]
+                } else if (result.errorCode) {
+                    errs << [id     : jobid, errorCode: result.errorCode,
+                             message: result.message ?:
+                                     g.message(code: result.errorCode, args: ['Job', "{{Job " + jobid + "}}"]
+                                     )]
+                } else if (result.error) {
+                    errs << result.error
+                } else {
+                    errs << [id: jobid, message: result.message]
+                }
+            } else {
+                def jobtitle = "{{Job " + result.scheduledExecution.extid + "}}"
+                successful << [message: g.message(code: successCode, args: [jobtitle]),id:jobid]
+            }
+        }
+        return [success: successful, errors: errs]
+    }
+
+    /**
+     * Disable execution for a set of jobs.
+     * Only allowed via POST http method
+     */
+    def flipExecutionDisabledBulk (ApiBulkJobDeleteRequest deleteRequest) {
+        log.debug("ScheduledExecutionController: flipExecutionDisabledBulk : params: " + params)
+        return handleFormFlipJobFlagBulk(deleteRequest, 'flipExecutionDisabledBulk', [executionEnabled: false], 'api.success.job.execution.disabled')
+
+    }
+    /**
+     * Enable schedule for a set of jobs.
+     * Only allowed via POST http method
+     */
+    def flipScheduleEnabledBulk (ApiBulkJobDeleteRequest deleteRequest) {
+        log.debug("ScheduledExecutionController: flipScheduleEnabledBulk : params: " + params)
+        return handleFormFlipJobFlagBulk(deleteRequest, 'flipScheduleEnabledBulk', [scheduleEnabled: true], 'api.success.job.schedule.enabled')
+    }
+    /**
+     * Disable schedule for a set of jobs.
+     * Only allowed via POST http method
+     */
+    def flipScheduleDisabledBulk (ApiBulkJobDeleteRequest deleteRequest) {
+        log.debug("ScheduledExecutionController: flipScheduleDisabledBulk : params: " + params)
+        return handleFormFlipJobFlagBulk(deleteRequest, 'flipScheduleDisabledBulk', [scheduleEnabled: false], 'api.success.job.schedule.disabled')
+
+    }
+    /**
      * Delete a set of jobs as specified in the idlist parameter.
      * Only allowed via POST http method
      */
     def deleteBulk (ApiBulkJobDeleteRequest deleteRequest) {
         if(deleteRequest.hasErrors()){
-            flash.errors = deleteRequest.error
+            flash.errors = deleteRequest.errors
             return redirect(controller: 'menu', action: 'jobs')
         }
         log.debug("ScheduledExecutionController: deleteBulk : params: " + params)
@@ -1057,13 +1249,7 @@ class ScheduledExecutionController  extends ControllerBase{
                 return redirect(controller: 'menu', action: 'jobs')
             }
             AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
-            def ids = new HashSet<String>()
-            if (deleteRequest.ids) {
-                ids.addAll(deleteRequest.ids)
-            }
-            if (deleteRequest.idlist) {
-                ids.addAll(deleteRequest.idlist.split(','))
-            }
+            def ids = deleteRequest.generateIdSet()
 
             def successful = []
             def deleteerrs = []
@@ -1078,12 +1264,170 @@ class ScheduledExecutionController  extends ControllerBase{
                     successful << result.success
                 }
             }
-            flash.bulkDeleteResult = [success: successful, errors: deleteerrs]
+            flash.bulkJobResult = [success: successful, errors: deleteerrs]
             redirect(controller: 'menu', action: 'jobs',params:[project:params.project])
         }.invalidToken{
             response.status = HttpServletResponse.SC_BAD_REQUEST
             request.errorCode = 'request.error.invalidtoken.message'
             return renderErrorView([:])
+        }
+    }
+    def apiFlipExecutionEnabledBulk(ApiBulkJobDeleteRequest deleteRequest) {
+        if(!apiService.requireVersion(request,response,ApiRequestFilters.V16)){
+            return
+        }
+        if (deleteRequest.hasErrors()) {
+            return apiService.renderErrorFormat(response, [status: HttpServletResponse.SC_BAD_REQUEST,
+                                                           code: 'api.error.invalid.request',
+                                                           args: [deleteRequest.errors.allErrors.collect { g.message(error: it) }.join("; ")]])
+        }
+        log.debug("ScheduledExecutionController: apiFlipExecutionEnabledBulk : params: " + params)
+
+        def ids = deleteRequest.generateIdSet()
+        if(!ids) {
+            if (!apiService.requireAnyParameters(params, response, ['ids', 'idlist','id'])) {
+                return
+            }
+        }
+        def result = performFlipJobFlagBulk(
+                deleteRequest,
+                'apiFlipExecutionEnabledBulk',
+                [executionEnabled: params.status],
+                'api.success.job.execution.'+(params.status?'enabled':'disabled')
+        )
+        def successful = result.success
+        def errors=result.errors
+
+        withFormat{
+            xml{
+                return apiService.renderSuccessXml(request,response) {
+                    delegate.'toggleExecution'(
+                            enabled: params.status,
+                            requestCount: ids.size(),
+                            allsuccessful: (successful.size() == ids.size())
+                    ) {
+                        if (successful) {
+                            delegate.'succeeded'(count: successful.size()) {
+                                successful.each { del ->
+                                    delegate.'toggleExecutionResult'(id: del.id,) {
+                                        delegate.'message'(del.message)
+                                    }
+                                }
+                            }
+                        }
+                        if (errors) {
+                            delegate.'failed'(count: errors.size()) {
+                                errors.each { del ->
+                                    delegate.'toggleExecutionResult'(id: del.id, errorCode: del.errorCode) {
+                                        delegate.'error'(del.message)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+            json{
+                return apiService.renderSuccessJson(response) {
+                    requestCount= ids.size()
+                    enabled=params.status
+                    allsuccessful=(successful.size()==ids.size())
+                    if(successful){
+                        delegate.'succeeded'=array {
+                            successful.each{del->
+                                delegate.'element'(id:del.id,message:del.message)
+                            }
+                        }
+                    }
+                    if(errors){
+                        delegate.'failed'=array {
+                            errors.each{del->
+                                delegate.'element'(id:del.id,errorCode:del.errorCode,message:del.message)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    def apiFlipScheduleEnabledBulk(ApiBulkJobDeleteRequest deleteRequest) {
+        if(!apiService.requireVersion(request,response,ApiRequestFilters.V16)){
+            return
+        }
+        if (deleteRequest.hasErrors()) {
+            return apiService.renderErrorFormat(response, [status: HttpServletResponse.SC_BAD_REQUEST,
+                                                           code: 'api.error.invalid.request',
+                                                           args: [deleteRequest.errors.allErrors.collect { g.message(error: it) }.join("; ")]])
+        }
+        log.debug("ScheduledExecutionController: apiFlipScheduleEnabledBulk : params: " + params)
+
+        def ids = deleteRequest.generateIdSet()
+        if(!ids) {
+            if (!apiService.requireAnyParameters(params, response, ['ids', 'idlist','id'])) {
+                return
+            }
+        }
+        def result = performFlipJobFlagBulk(
+                deleteRequest,
+                'apiFlipScheduleEnabledBulk',
+                [scheduleEnabled: params.status],
+                'api.success.job.schedule.'+(params.status?'enabled':'disabled')
+        )
+        def successful = result.success
+        def errors=result.errors
+
+        withFormat{
+            xml{
+                return apiService.renderSuccessXml(request,response) {
+                    delegate.'toggleSchedule'(
+                            enabled: params.status,
+                            requestCount: ids.size(),
+                            allsuccessful: (successful.size() == ids.size())
+                    ) {
+                        if (successful) {
+                            delegate.'succeeded'(count: successful.size()) {
+                                successful.each { del ->
+                                    delegate.'toggleScheduleResult'(id: del.id,) {
+                                        delegate.'message'(del.message)
+                                    }
+                                }
+                            }
+                        }
+                        if (errors) {
+                            delegate.'failed'(count: errors.size()) {
+                                errors.each { del ->
+                                    delegate.'toggleScheduleResult'(id: del.id, errorCode: del.errorCode) {
+                                        delegate.'error'(del.message)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+            json{
+                return apiService.renderSuccessJson(response) {
+                    requestCount= ids.size()
+                    enabled=params.status
+                    allsuccessful=(successful.size()==ids.size())
+                    if(successful){
+                        delegate.'succeeded'=array {
+                            successful.each{del->
+                                delegate.'element'(id:del.id,message:del.message)
+                            }
+                        }
+                    }
+                    if(errors){
+                        delegate.'failed'=array {
+                            errors.each{del->
+                                delegate.'element'(id:del.id,errorCode:del.errorCode,message:del.message)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -1144,6 +1488,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def changeinfo = [user: session.user, method: 'apiJobCreateSingle']
         String roleList = request.subject.getPrincipals(Group.class).collect { it.name }.join(",")
         def loadresults = scheduledExecutionService.loadJobs(jobset, 'create', 'preserve', changeinfo, authContext)
+        scheduledExecutionService.issueJobChangeEvents(loadresults.jobChangeEvents)
 
         def jobs = loadresults.jobs
         def jobsi = loadresults.jobsi
@@ -1216,6 +1561,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def changeinfo = [user: session.user, method: 'apiJobUpdateSingle']
         String roleList = request.subject.getPrincipals(Group.class).collect { it.name }.join(",")
         def loadresults = scheduledExecutionService.loadJobs(jobset, 'update', 'preserve', changeinfo, authContext)
+        scheduledExecutionService.issueJobChangeEvents(loadresults.jobChangeEvents)
 
         def jobs = loadresults.jobs
         def jobsi = loadresults.jobsi
@@ -1340,7 +1686,7 @@ class ScheduledExecutionController  extends ControllerBase{
         }
     }
 
-    def edit = {
+    def edit (){
         log.debug("ScheduledExecutionController: edit : params: " + params)
         def scheduledExecution = scheduledExecutionService.getByIDorUUID( params.id )
         if(!scheduledExecution) {
@@ -1439,6 +1785,8 @@ class ScheduledExecutionController  extends ControllerBase{
                     params:params
                    ])
         }else{
+
+            scheduledExecutionService.issueJobChangeEvent(result.jobChangeEvent)
 
             clearEditSession('_new')
             clearEditSession(scheduledExecution.id.toString())
@@ -1800,7 +2148,7 @@ class ScheduledExecutionController  extends ControllerBase{
 
 
 
-    def save = {
+    def save () {
         withForm{
         UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,params.project)
         def changeinfo=[user:session.user,change:'create',method:'save']
@@ -1808,6 +2156,7 @@ class ScheduledExecutionController  extends ControllerBase{
         //pass session-stored edit state in params map
         transferSessionEditState(session, params,'_new')
         def result = scheduledExecutionService._dosave(params, authContext, changeinfo)
+        scheduledExecutionService.issueJobChangeEvent(result.jobChangeEvent)
         def scheduledExecution = result.scheduledExecution
         if(result.success && scheduledExecution.id){
             clearEditSession()
@@ -1818,6 +2167,9 @@ class ScheduledExecutionController  extends ControllerBase{
         }else{
             if(scheduledExecution){
                 scheduledExecution.errors.allErrors.each { log.warn(it.defaultMessage) }
+                if(!scheduledExecution.jobName){
+                    scheduledExecution.jobName=''
+                }
             }
             if (result.unauthorized){
                 request.message = result.error
@@ -1829,7 +2181,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def nodeStepTypes = frameworkService.getNodeStepPluginDescriptions()
         def stepTypes = frameworkService.getStepPluginDescriptions()
         render(view: 'create', model: [scheduledExecution: scheduledExecution, params: params,
-                projects: frameworkService.projects(authContext), nodeStepDescriptions: nodeStepTypes,
+                                       nodeStepDescriptions: nodeStepTypes,
                 stepDescriptions: stepTypes,
                 notificationPlugins: notificationService.listNotificationPlugins(),
                 orchestratorPlugins: orchestratorPluginService.listDescriptions(),
@@ -1889,6 +2241,7 @@ class ScheduledExecutionController  extends ControllerBase{
         String roleList = request.subject.getPrincipals(Group.class).collect {it.name}.join(",")
         def loadresults = scheduledExecutionService.loadJobs(jobset, params.dupeOption, params.uuidOption,
                  changeinfo,authContext)
+            scheduledExecutionService.issueJobChangeEvents(loadresults.jobChangeEvents)
 
 
         def jobs = loadresults.jobs
@@ -1939,8 +2292,9 @@ class ScheduledExecutionController  extends ControllerBase{
                 if (e && e.scheduledExecution?.id == scheduledExecution.id) {
                     model.failedNodes = e.failedNodeList
                     if(varfound){
-                        nset = ExecutionService.filtersAsNodeSet([filter: "name: " + e.failedNodeList])
+                        nset = ExecutionService.filtersAsNodeSet([filter: OptsUtil.join("name:", e.failedNodeList)])
                     }
+                    model.nodesetvariables = false
                 }
             }
             def nodes = frameworkService.filterAuthorizedNodes(
@@ -2290,7 +2644,7 @@ class ScheduledExecutionController  extends ControllerBase{
 //            response.setStatus (404)
             return [error:"No Job found for id: " + params.id,code:404]
         }
-        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
+        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
         if (!frameworkService.authorizeProjectJobAll(authContext, scheduledExecution, [AuthConstants.ACTION_RUN],
             scheduledExecution.project)) {
             return [success:false,failed:true,error:'unauthorized',message: "Unauthorized: Execute Job ${scheduledExecution.extid}"]
@@ -2546,6 +2900,7 @@ class ScheduledExecutionController  extends ControllerBase{
             option = null
         }
         def loadresults = scheduledExecutionService.loadJobs(jobset,params.dupeOption, option, changeinfo, authContext)
+        scheduledExecutionService.issueJobChangeEvents(loadresults.jobChangeEvents)
 
         def jobs = loadresults.jobs
         def jobsi = loadresults.jobsi
@@ -2553,6 +2908,10 @@ class ScheduledExecutionController  extends ControllerBase{
         def errjobs = loadresults.errjobs
         def skipjobs = loadresults.skipjobs
 
+        //force hibernate session flush
+        ScheduledExecution.withSession { session->
+            session.flush()
+        }
         withFormat{
             xml{
 
@@ -2633,7 +2992,7 @@ class ScheduledExecutionController  extends ControllerBase{
         if (!apiService.requireExists(response, scheduledExecution, ['Job ID', jobid])) {
             return
         }
-        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
+        UserAndRolesAuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,scheduledExecution.project)
 
         if (!frameworkService.authorizeProjectJobAll(authContext, scheduledExecution, [AuthConstants.ACTION_RUN],
             scheduledExecution.project)) {
@@ -3109,13 +3468,22 @@ class ScheduledExecutionController  extends ControllerBase{
         if (!apiService.requireVersion(request,response,ApiRequestFilters.V14)) {
             return
         }
+        def api17 = request.api_version >= ApiRequestFilters.V17
+
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
         //test valid project
 
         if (!frameworkService.authorizeApplicationResource(authContext, AuthConstants.RESOURCE_TYPE_JOB,
                 AuthConstants.ACTION_ADMIN)) {
-            return apiService.renderErrorFormat(response, [status: HttpServletResponse.SC_FORBIDDEN,
-                    code: 'api.error.item.unauthorized', args: ['Reschedule Jobs (admin)', 'Server', params.serverNodeUUID]])
+            return apiService.renderErrorFormat(response, [
+                    status: HttpServletResponse.SC_FORBIDDEN,
+                    code: 'api.error.item.unauthorized',
+                    args: [
+                            'Reschedule Jobs (admin)',
+                            'Server',
+                            frameworkService.getServerUUID()
+                    ]
+            ])
         }
         if (!frameworkService.isClusterModeEnabled()) {
             withFormat {
@@ -3139,11 +3507,13 @@ class ScheduledExecutionController  extends ControllerBase{
         String serverUUID=null
         boolean serverAll=false
         String project=null
+        def jobid=null
         if(request.format=='json' ){
             def data= request.JSON
             serverUUID = data?.server?.uuid?:null
             serverAll = data?.server?.all?true:false
             project = data?.project?:null
+            jobid = data?.job?.id?:null
         }else if(request.format=='xml' || !request.format){
             def data= request.XML
             if(data.name()=='server'){
@@ -3153,28 +3523,34 @@ class ScheduledExecutionController  extends ControllerBase{
                 serverUUID = data.server?.'@uuid'?.text()?:null
                 serverAll = data.server?.'@all'?.text()=='true'
                 project = data.project?.'@name'?.text()?:null
+                jobid = data.job?.'@id'?.text()?:null
             }
         }else{
             return apiService.renderErrorFormat(response, [status: HttpServletResponse.SC_UNSUPPORTED_MEDIA_TYPE,
                     code: 'api.error.invalid.request',
                     args: ['Expected content of type text/xml or text/json, content was of type: ' + request.format]])
         }
-        if (!serverUUID && !serverAll) {
+        if (!serverUUID && !serverAll&& !jobid) {
             return apiService.renderErrorFormat(response, [status: HttpServletResponse.SC_BAD_REQUEST,
-                    code: 'api.error.invalid.request', args: ['Expected server.uuid or server.all in request.']])
+                    code: 'api.error.invalid.request', args: ['Expected server.uuid or server.all or job.id in request.']])
         }
 
-        def reclaimMap=scheduledExecutionService.reclaimAndScheduleJobs(serverUUID,serverAll,project)
+        def reclaimMap=scheduledExecutionService.reclaimAndScheduleJobs(serverUUID,serverAll,project,jobid)
         def successCount=reclaimMap.findAll {it.value.success}.size()
         def failedCount = reclaimMap.size() - successCount
         //TODO: retry for failed reclaims?
 
         def jobData = { entry ->
-            [
+            def dat=[
                     id: entry.key,
                     href: apiService.apiHrefForJob(entry.value.job),
-                    permalink:apiService.guiHrefForJob(entry.value.job)
+                    permalink:apiService.guiHrefForJob(entry.value.job),
+
             ]
+            if(api17){
+                dat['previous-owner']=entry.value.previous
+            }
+            dat
         }
         def jobLink={ delegate, entry->
             delegate.'job'(jobData(entry))
@@ -3202,6 +3578,9 @@ class ScheduledExecutionController  extends ControllerBase{
                         }
                         if(project){
                             delegate.'project'(name:project)
+                        }
+                        if(jobid){
+                            delegate.'job'(id:jobid)
                         }
                         delegate.'jobs'(total: reclaimMap.size()){
                             delegate.'successful'(count: successCount) {

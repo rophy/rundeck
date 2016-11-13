@@ -971,6 +971,16 @@ So the arguments for the Job Reference might look like this:
 
 > Note, If you define arguments in the wrong manner, then the Secure and Secure Remote Authentication options will not be set when the Job reference is called.  Plain options will behave the way they do in Command or Script arguments, and be left as-is as uninterpreted property references.
 
+### Secure Options using Key Storage
+
+Secure options can specify a Storage Path in lieu of a default value.  This path to the [Key Storage Facility](../administration/key-storage.html)
+will be loaded as the option value when one is not supplied.
+
+The path must indicate a stored `password` entry in the storage facility.
+
+
+![Storage Path for Secure Option](../figures/jobs-options-secure-storage-path.png)
+
 ## Remote option values
 
 A model of option values can be retrieved from an external source
@@ -1124,7 +1134,7 @@ Two types of expansions are available, Job context, and Option
 context.
 
 To include job information in the URL, specify a variable of the form
-${job._property_}.
+`${job._property_}`.
 
 Properties available for Job context:
 
@@ -1135,6 +1145,9 @@ Properties available for Job context:
 * `user.name`: User executing the job
 * `rundeck.nodename`: Name of the Rundeck server node
 * `rundeck.serverUUID`: UUID of the Rundeck server node (cluster mode)
+* `rundeck.basedir`: File path of the Rundeck base dir (`file://` URLs only)
+
+Additionally the `rundeck.*` properties can be specified without the `job.` prefix, e.g. `${rundeck.basedir}`.
 
 To include Option information in the URL, specify a variable of the
 form ${option._property_}:
@@ -1642,4 +1655,4 @@ Context variables can be used in a few ways in a Job step, with slightly differe
 [job-xml]: ../man5/job-xml.html
 [job-yaml]: ../man5/job-yaml.html
 
-[Quartz Scheduler crontrigger]: http://www.quartz-scheduler.org/documentation/quartz-1.x/tutorials/crontrigger
+[Quartz Scheduler crontrigger]: http://www.quartz-scheduler.org/api/2.2.1/org/quartz/CronTrigger.html

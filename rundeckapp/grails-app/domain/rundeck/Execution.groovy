@@ -25,6 +25,7 @@ class Execution extends ExecutionContext {
     Execution retryExecution
     Orchestrator orchestrator;
 
+    static hasOne = [logFileStorageRequest: LogFileStorageRequest]
     static transients=['executionState','customStatusString']
     static constraints = {
         project(matches: FrameworkResource.VALID_RESOURCE_NAME_REGEX, validator:{val,Execution obj->
@@ -32,6 +33,7 @@ class Execution extends ExecutionContext {
                 return 'job.project.mismatch.error'
             }
         })
+        logFileStorageRequest(nullable:true)
         workflow(nullable:true)
         argString(nullable:true)
         dateStarted(nullable:true)
@@ -83,6 +85,7 @@ class Execution extends ExecutionContext {
         //mapping overrides superclass, so we need to relist these
         user column: "rduser"
         argString type: 'text'
+        logFileStorageRequest fetch: 'join'
 
         failedNodeList type: 'text'
         succeededNodeList type: 'text'
@@ -153,7 +156,7 @@ class Execution extends ExecutionContext {
         } else {
             duration = String.valueOf( dms.intdiv( 60000) ) + "m"
         }
-        return String.valueOf(duration)        
+        return String.valueOf(duration)
     }
 
     def String outputfilepathSizeAsString() {
@@ -239,7 +242,7 @@ class Execution extends ExecutionContext {
         exec.timedOut = XmlParserUtil.stringToBool(data.timedOut,false)
         exec.argString = data.argString
         exec.loglevel = data.loglevel
-        exec.doNodedispatch = data.doNodedispatch
+        exec.doNodedispatch = XmlParserUtil.stringToBool(data.doNodedispatch,false)
         exec.timeout = data.timeout
         if(data.retryAttempt){
             exec.retryAttempt= XmlParserUtil.stringToInt(data.retryAttempt, 0)

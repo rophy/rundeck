@@ -179,14 +179,58 @@
                                 </g:if>
                                 <g:else>
                                     <span
-                                        class="warn note"><g:message code="invalid.resource.model.source.configuration.provider.not.found"  args="${[config.type]}"/></span>
+                                        class="text-warning"><g:message code="invalid.resource.model.source.configuration.provider.not.found"  args="${[config.type]}"/></span>
                                 </g:else>
+                                <g:if test="${nodeErrorsMap && nodeErrorsMap[(n+1)+'.source']}">
+                                    <div class="row row-space">
+                                    <div class="col-sm-12">
+                                        <g:set var="arkey" value="${g.rkey()}"/>
+                                        <div class=" well well-embed text-danger " id="srcerr_${arkey}">
+                                            <g:icon name="warning-sign"/>
+                                            Error:
+                                            ${nodeErrorsMap[(n+1)+'.source'].message}
+                                        </div>
+                                    </div>
+                                    </div>
+                                </g:if>
                             </div>
                         </li>
                     </g:each>
                 </g:if>
             </ol>
         </li>
+
+             <g:if test="${extraConfig}">
+                 <div class="list-group-item">
+                     <h4 class="list-group-item-heading ">
+                         <g:message code="resource.model" />
+                     </h4>
+
+                     <span class="text-muted">
+                         <g:message code="additional.configuration.for.the.resource.model.for.this.project" />
+                     </span>
+
+                     <div class="inpageconfig">
+                         <g:each in="${extraConfig.keySet()}" var="configService">
+                             <g:set var="configurable" value="${extraConfig[configService].configurable}"/>
+                             <g:if test="${configurable.category == 'resourceModelSource'}">
+
+                                 <g:set var="pluginprefix" value="${extraConfig[configService].get('prefix')}"/>
+
+                                 <g:each in="${configurable.projectConfigProperties}" var="prop">
+                                     <g:render template="/framework/pluginConfigPropertySummaryValue"
+                                               model="${[
+                                                       prop:prop,
+                                                       prefix:pluginprefix,
+                                                         values:extraConfig[configService].get('values')?:[:],
+                                               ]}"/>
+                                 </g:each>
+                                 
+                             </g:if>
+                         </g:each>
+                     </div>
+                 </div>
+             </g:if>
 
         <li class="list-group-item">
             <h4 class="list-group-item-heading">

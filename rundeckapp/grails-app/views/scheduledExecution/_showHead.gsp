@@ -68,13 +68,27 @@
     </g:if>
         <g:if test="${scheduledExecution.scheduled && nextExecution}">
             <span class="scheduletime">
-                <i class="glyphicon glyphicon-time"></i>
+                <g:if test="${serverNodeUUID && !remoteClusterNodeUUID}">
+                    <span class="text-warning has_tooltip" title="${message(code:"scheduledExecution.scheduled.cluster.orphan.title")}"
+                          data-placement="right"
+                    >
+                        <g:icon name="alert"/>
+                    </span>
+                </g:if>
+                <g:else>
+                    <g:icon name="time"/>
+                </g:else>
                 <g:set var="titleHint"
-                       value="${remoteClusterNodeUUID ? g.message(code: "expecting.another.cluster.server.to.run") : ''}"/>
-                <span title="${clusterUUID ? g.message(code: "expecting.another.cluster.server.to.run") : ''} at ${enc(attr:g.relativeDate(atDate:nextExecution))}">
+                       value="${remoteClusterNodeUUID ? g.message(code: "scheduled.to.run.on.server.0") : ''}"/>
+                <span title="${remoteClusterNodeUUID ? g.message(code: "scheduled.to.run.on.server.0", args:[remoteClusterNodeUUID]) : ''} at ${enc(attr:g.relativeDate(atDate:nextExecution))}">
                     <g:relativeDate elapsed="${nextExecution}"
                                     untilClass="timeuntil"/>
                 </span>
+                <g:if test="${remoteClusterNodeUUID}">
+                    on
+                    <span data-server-uuid="${remoteClusterNodeUUID}" data-server-name="${remoteClusterNodeUUID}" class="rundeck-server-uuid text-muted">
+                    </span>
+                </g:if>
             </span>
         </g:if>
         <g:elseif test="${scheduledExecution.scheduled && !g.executionMode(is:'active')}">

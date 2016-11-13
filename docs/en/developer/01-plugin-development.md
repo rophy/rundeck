@@ -297,7 +297,7 @@ The file `plugin.yaml` must have this structure:
  
 name: plugin name
 version: plugin version
-rundeckPluginVersion: 1.0
+rundeckPluginVersion: 1.1
 author: author name
 date: release date
 providers:
@@ -313,7 +313,7 @@ The main metadata that is required:
 
 * `name` - name for the plugin
 * `version` - version number of the plugin
-* `rundeckPluginVersion` - Rundeck Plugin type version, currently "1.0"
+* `rundeckPluginVersion` - Rundeck Plugin type version, currently "1.1"
 * `providers` - list of provider metadata maps
 
 These are optional:
@@ -323,6 +323,15 @@ These are optional:
 
 This provides the necessary metadata about the plugin, including one or more 
 entries in the `providers` list to declare those providers defined in the plugin.
+
+### Plugin version changes
+
+The value of `rundeckPluginVersion` defines some features of the loaded plugin.
+
+* `1.1` 
+    * uses a default of `true` for `mergeEnvironment` (see below)
+* `1.0` first release
+    * uses a default of `false` for `mergeEnvironment` (see below)
 
 ### Provider metadata
 
@@ -353,6 +362,11 @@ Optional entries:
      `${interpreter} "${file} ${arg1} ${arg2}..."`. If false,
     the execution will be done by passing the file and args as separate arguments:
      `${interpreter} ${file} ${arg1} ${arg2}...`
+* `mergeEnvironment` - boolean, if true (default for `rundeckPluginVersion: 1.1+`), when the script
+  is executed the Environment variables from the Rundeck server
+  will be merged with the context environment variables provided to the script.
+  If false (default for `rundeckPluginVersion: 1.0`), then
+  only the context environment variables will be provided.
 * `config` - a Map defining custom plugin properties (see below.)
 
 ### Plugin properties
@@ -574,6 +588,7 @@ Available rendering option keys:
     - `SINGLE_LINE` - display input as a single text field.
     - `MULTI_LINE` - display input as a multi-line text area.
     - `PASSWORD` - display input as a password field
+    - `STATIC_TEXT` - display static text without an input field, using the default value as the text
 * `instance-scope-node-attribute`
     - Value is the name of a Node attribute to use for instance-scoped properties for *Node Services* plugins `NodeExecutor` and `FileCopier` only.
 * `selectionAccessor`, values:
@@ -588,3 +603,13 @@ Available rendering option keys:
   * `valueConversionFailure` can be used to indicate that if the Private data context, or Storage path data is not present,
     then the config data key should be removed.  Allowed values:
     - `remove` - remove the original config property value if the conversion is not successful
+  * `staticTextContentType` if displayType is `STATIC_TEXT`, the content type for the defaultValue text. values:
+    - `text/html` render as sanitized HTML
+    - `text/x-markdown` convert markdown text to sanitized HTML
+    - any other value or if not specified: render text directly
+  * `groupName` specifies a group that the input field belongs to.  If not specified the field will be in the
+  primary, unnamed group.  If specified, all fields with the same `groupName` value will be
+  displayed in a common area under the group name.
+  * `grouping` allowed value: `secondary`, indicates that the specified `groupName` should be shown in a
+  collapsed state if no input values in that group have been set. If no `groupName` is set, then the field
+  will be displayed under a group with a heading of "More".

@@ -23,6 +23,10 @@ import rundeck.Execution
 import rundeck.ScheduledExecution
 import rundeck.codecs.JobsXMLCodec
 import rundeck.controllers.JobXMLException
+import rundeck.services.logging.ExecutionFile
+import rundeck.services.logging.ExecutionFileDeletePolicy
+import rundeck.services.logging.ExecutionFileProducer
+import rundeck.services.logging.ProducedExecutionFile
 
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -34,7 +38,10 @@ import java.util.regex.Pattern
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-class ProjectService implements InitializingBean{
+class ProjectService implements InitializingBean, ExecutionFileProducer{
+    public static final String EXECUTION_XML_LOG_FILETYPE = 'execution.xml'
+    final String executionFileType = EXECUTION_XML_LOG_FILETYPE
+
     def grailsApplication
     def scheduledExecutionService
     def executionService
@@ -79,30 +86,73 @@ class ProjectService implements InitializingBean{
         }
     }
 
-    def exportExecution(ZipBuilder zip, Execution exec, String name) throws ProjectServiceException {
+    @Override
+    boolean isExecutionFileGenerated() {
+        return true
+    }
+
+    @Override
+    ExecutionFile produceStorageFileForExecution(final Execution e) {
+        File localfile = getExecutionXmlFileForExecution(e)
+
+        new ProducedExecutionFile(localFile: localfile, fileDeletePolicy: ExecutionFileDeletePolicy.ALWAYS)
+    }
+
+    /**
+     * Write execution.xml file to a temp file and return
+     * @param exec execution
+     * @return file containing execution.xml
+     */
+    File getExecutionXmlFileForExecution(Execution execution){
+        File executionXmlTempfile = File.createTempFile("execution-${execution.id}", ".xml")
+        executionXmlTempfile.withWriter("UTF-8") { Writer writer ->
+            exportExecutionXml(
+                    execution,
+                    writer,
+                    "output-${execution.id}.rdlog"
+            )
+        }
+        executionXmlTempfile.deleteOnExit()
+        executionXmlTempfile
+    }
+    /**
+     * Write execution.xml file to the writer
+     * @param exec execution
+     * @param writer writer
+     * @param logfilepath optional new outputfilepath to set for the xml
+     * @return
+     */
+    def exportExecutionXml(Execution exec, Writer writer, String logfilepath =null){
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
         sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
         def dateConvert = {
             sdf.format(it)
         }
         BuilderUtil builder = new BuilderUtil()
-        builder.converters= [(Date): dateConvert, (java.sql.Timestamp): dateConvert]
-
+        builder.converters = [(Date): dateConvert, (java.sql.Timestamp): dateConvert]
         def map = exec.toMap()
         BuilderUtil.makeAttribute(map, 'id')
-        def File outfile = loggingService.getLogFileForExecution(exec)
-        if (outfile && outfile.isFile()) {
+        if (logfilepath) {
             //change entry to point to local file
-            map.outputfilepath = "output-${exec.id}.rdlog"
+            map.outputfilepath = logfilepath
         }
         JobsXMLCodec.convertWorkflowMapForBuilder(map.workflow)
+        def xml = new MarkupBuilder(writer)
+        builder.objToDom("executions", [execution: map], xml)
+    }
+    def exportExecution(ZipBuilder zip, Execution exec, String name) throws ProjectServiceException {
+
+        def File logfile = loggingService.getLogFileForExecution(exec)
+        String logfilepath=null
+        if (logfile && logfile.isFile()) {
+            logfilepath = "output-${exec.id}.rdlog"
+        }
         //convert map to xml
         zip.file("$name") { Writer writer ->
-            def xml = new MarkupBuilder(writer)
-            builder.objToDom("executions", [execution:map], xml)
+            exportExecutionXml(exec, writer, logfilepath)
         }
-        if (outfile && outfile.isFile()) {
-            zip.file "output-${exec.id}.rdlog", outfile
+        if (logfile && logfile.isFile()) {
+            zip.file logfilepath, logfile
         }
         def File statefile = workflowService.getStateFileForExecution(exec)
         if (statefile && statefile.isFile()) {
@@ -183,7 +233,7 @@ class ProjectService implements InitializingBean{
      * input IDs from the XML, 'retryidmap' map of new Executions to old the 'retry' execution ID
      * @throws ProjectServiceException if an error occurs
      */
-    def loadExecutions(xmlinput,Map jobIdMap=null, skipJobIds = []) throws ProjectServiceException {
+    def loadExecutions(xmlinput, String projectName, Map jobIdMap=null, skipJobIds = []) throws ProjectServiceException {
         Node doc = parseXml(xmlinput)
         if (!doc) {
             throw new ProjectServiceException("XML Document could not be parsed.")
@@ -210,6 +260,13 @@ class ProjectService implements InitializingBean{
                 }else if(object.jobId && skipJobIds && skipJobIds.contains(object.jobId)){
                     log.debug("Execution skipped ${object.id} for job ${object.jobId}")
                     return
+                }else if(object.jobId) {
+                    //look for same ID
+                    def found = scheduledExecutionService.getByIDorUUID(object.jobId)
+                    if(found && found.project==projectName){
+                        se=found
+                    }
+
                 }
                 if(object.id){
                     object.id=XmlParserUtil.stringToInt(object.id,-1)
@@ -429,9 +486,14 @@ class ProjectService implements InitializingBean{
      * @return
      * @throws ProjectServiceException
      */
-    def exportProjectToOutputStream(IRundeckProject project, Framework framework,
-                                    OutputStream stream, ProgressListener listener=null,
-                                    boolean aclReadAuth=false) throws ProjectServiceException{
+    def exportProjectToOutputStream(IRundeckProject project,
+                                    Framework framework,
+                                    OutputStream stream,
+                                    ProgressListener listener=null,
+                                    boolean aclReadAuth=false,
+                                    ArchiveOptions options=null
+    ) throws ProjectServiceException
+    {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US);
         sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
 
@@ -443,7 +505,7 @@ class ProjectService implements InitializingBean{
         manifest.mainAttributes.putValue('Rundeck-Archive-Export-Date', sdf.format(new Date()))
 
         def zip = new JarOutputStream(stream,manifest)
-        exportProjectToStream(project, framework, zip, listener, aclReadAuth)
+        exportProjectToStream(project, framework, zip, listener, aclReadAuth,options)
         zip.close()
     }
 
@@ -452,34 +514,64 @@ class ProjectService implements InitializingBean{
             Framework framework,
             ZipOutputStream output,
             ProgressListener listener = null,
-            boolean aclReadAuth=false
+            boolean aclReadAuth=false,
+            ArchiveOptions options=null
     ) throws ProjectServiceException
     {
         ZipBuilder zip = new ZipBuilder(output)
 //        zip.debug = true
         String projectName = project.name
-
-        listener?.total(
-                'export',
-                ScheduledExecution.countByProject(projectName)+
-                        3 * Execution.countByProject(projectName)+
-                        BaseReport.countByCtxProject(projectName)+
-                        4 //properties and other files
-        )
+        if(!options ||options.all) {
+            listener?.total(
+                    'export',
+                    ScheduledExecution.countByProject(projectName) +
+                            3 * Execution.countByProject(projectName) +
+                            BaseReport.countByCtxProject(projectName) +
+                            4 //properties and other files
+            )
+        }else if(options.executionsOnly) {
+            listener?.total(
+                    'export',
+                    4 * options.executionIds.size()
+            )
+        }
 
         zip.dir("rundeck-${projectName}/") {
             //export jobs
-            def jobs = ScheduledExecution.findAllByProject(projectName)
-            dir('jobs/') {
-                jobs.each { ScheduledExecution job ->
-                    zip.file("job-${job.extid.encodeAsURL()}.xml") { Writer writer ->
-                        exportJob job, writer
-                        listener?.inc('export',1)
+            if(!options ||options.all) {
+                def jobs = ScheduledExecution.findAllByProject(projectName)
+                dir('jobs/') {
+                    jobs.each { ScheduledExecution job ->
+                        zip.file("job-${job.extid.encodeAsURL()}.xml") { Writer writer ->
+                            exportJob job, writer
+                            listener?.inc('export', 1)
+                        }
                     }
                 }
             }
 
-            def execs = Execution.findAllByProject(projectName)
+            List<Execution> execs=[]
+            List<BaseReport> reports=[]
+            if(!options || options.all){
+                execs = Execution.findAllByProject(projectName)
+                reports = BaseReport.findAllByCtxProject(projectName)
+            }else if(options.executionsOnly){
+                //find execs
+                List<Long> execIds = []
+                List<String> execIdStrings = []
+                options.executionIds.each {
+                    if(it instanceof Long){
+                        execIds<<it
+                        execIdStrings<<it.toString()
+                    }else if(it instanceof String){
+                        execIds<<Long.parseLong(it)
+                        execIdStrings<<it
+                    }
+                }
+                execs = Execution.findAllByProjectAndIdInList(projectName,execIds)
+                reports=ExecReport.findAllByCtxProjectAndJcExecIdInList(projectName,execIdStrings)
+            }
+
             dir('executions/') {
                 //export executions
                 //export execution logs
@@ -489,7 +581,7 @@ class ProjectService implements InitializingBean{
                 }
             }
             //export history
-            def reports = BaseReport.findAllByCtxProject(projectName)
+
             dir('reports/') {
                 reports.each { BaseReport report ->
                     exportHistoryReport zip, report, "report-${report.id}.xml"
@@ -498,57 +590,59 @@ class ProjectService implements InitializingBean{
             }
 
             //export config
-            dir('files/'){
-                dir('etc/'){
-                    zip.file('project.properties'){Writer writer->
-                        def map = project.getProjectProperties()
-                        map = replaceRelativePathsForProjectProperties(project,framework,map,'%PROJECT_BASEDIR%')
-                        def projectProps = map as Properties
-                        def sw = new StringWriter()
-                        projectProps.store(sw,"Exported configuration")
-                        def projectPropertiesText = sw.toString().
-                                split(Pattern.quote(System.getProperty("line.separator"))).
-                                sort().
-                                join(System.getProperty("line.separator"))
-                        writer.write(projectPropertiesText)
+            if(!options || options.all) {
+                dir('files/') {
+                    dir('etc/') {
+                        zip.file('project.properties') { Writer writer ->
+                            def map = project.getProjectProperties()
+                            map = replaceRelativePathsForProjectProperties(project, framework, map, '%PROJECT_BASEDIR%')
+                            def projectProps = map as Properties
+                            def sw = new StringWriter()
+                            projectProps.store(sw, "Exported configuration")
+                            def projectPropertiesText = sw.toString().
+                                    split(Pattern.quote(System.getProperty("line.separator"))).
+                                    sort().
+                                    join(System.getProperty("line.separator"))
+                            writer.write(projectPropertiesText)
 
-                        listener?.inc('export',1)
-                    }
-                }
-                ['readme.md','motd.md'].each{filename->
-                    if(project.existsFileResource(filename)){
-                        zip.fileStream(filename){OutputStream stream->
-                            project.loadFileResource(filename,stream)
-                            listener?.inc('export',1)
+                            listener?.inc('export', 1)
                         }
-                    }else{
-                        listener?.inc('export',1)
                     }
-                }
-                if(aclReadAuth) {
-                    //acls
-                    def policies = project.listDirPaths('acls/').grep(~/^.*\.aclpolicy$/)
-                    if (policies) {
-                        def count = policies.size()
-                        dir('acls/') {
-                            policies.each { path ->
-                                def fname = path.substring('acls/'.length())
-                                zip.fileStream(fname) { OutputStream stream ->
-                                    project.loadFileResource(path, stream)
-                                    count--
-                                    if (count == 0) {
-                                        listener?.inc('export', 1)
+                    ['readme.md', 'motd.md'].each { filename ->
+                        if (project.existsFileResource(filename)) {
+                            zip.fileStream(filename) { OutputStream stream ->
+                                project.loadFileResource(filename, stream)
+                                listener?.inc('export', 1)
+                            }
+                        } else {
+                            listener?.inc('export', 1)
+                        }
+                    }
+                    if (aclReadAuth) {
+                        //acls
+                        def policies = project.listDirPaths('acls/').grep(~/^.*\.aclpolicy$/)
+                        if (policies) {
+                            def count = policies.size()
+                            dir('acls/') {
+                                policies.each { path ->
+                                    def fname = path.substring('acls/'.length())
+                                    zip.fileStream(fname) { OutputStream stream ->
+                                        project.loadFileResource(path, stream)
+                                        count--
+                                        if (count == 0) {
+                                            listener?.inc('export', 1)
+                                        }
                                     }
                                 }
                             }
+                        } else {
+                            listener?.inc('export', 1)
                         }
                     } else {
                         listener?.inc('export', 1)
                     }
-                } else {
-                    listener?.inc('export', 1)
-                }
 
+                }
             }
         }
         listener?.done()
@@ -724,6 +818,9 @@ class ProjectService implements InitializingBean{
                         [:],
                         authContext
                 )
+
+                scheduledExecutionService.issueJobChangeEvents(results.jobChangeEvents)
+
                 if (results.errjobs) {
                     log.error(
                             "Failed loading (${results.errjobs.size()}) jobs from XML at archive path: ${path}${name}"
@@ -894,7 +991,7 @@ class ProjectService implements InitializingBean{
         execxml.each { File exml ->
             def results
             try {
-                results = loadExecutions(exml, jobIdMap,skipJobIds)
+                results = loadExecutions(exml,projectName, jobIdMap,skipJobIds)
             } catch (ProjectServiceException e) {
                 log.debug("[${execxmlmap[exml]}] ${e.message}",e)
                 execerrors<<"[${execxmlmap[exml]}] ${e.message}"
@@ -990,7 +1087,7 @@ class ProjectService implements InitializingBean{
         def result = [success: false]
 
         //disable scm
-        scmService.removeAllPluginConfiguration(project.name, null)
+        scmService.removeAllPluginConfiguration(project.name)
 
         BaseReport.withTransaction { TransactionStatus status ->
 
@@ -1028,6 +1125,18 @@ class ProjectService implements InitializingBean{
             framework.getFrameworkProjectMgr().removeFrameworkProject(project.name)
         }
         return result
+    }
+}
+class ArchiveOptions{
+    Set executionIds=null
+    boolean executionsOnly=false
+    boolean all=true
+    def parseExecutionsIds(execidsparam){
+        if(execidsparam instanceof String){
+            executionIds=new HashSet(execidsparam.split(',') as List)
+        }else {
+            executionIds=new HashSet([execidsparam].flatten())
+        }
     }
 }
 class ArchiveRequest {

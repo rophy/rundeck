@@ -47,9 +47,58 @@ If the version number is not included or if the requested version number is unsu
 }
 ~~~~~~~~~~~~~~~~~~~
 
+## Index Links
+
+View the [Index](#index) listing API paths.
+
 ## Changes
 
 Changes introduced by API Version number:
+
+**Version 17**:
+
+* New Endpoints.
+    - [`/api/17/scheduler/server/[UUID]/jobs`][/api/V/scheduler/server/[UUID]/jobs] - List scheduled jobs owned by the server with given UUID.
+    - [`/api/17/scheduler/jobs`][/api/V/scheduler/jobs] - List scheduled jobs owned by the target server.
+    - [`/api/17/system/logstorage`][/api/V/system/logstorage] - Get stats about the Log File storage system.
+    - [`/api/17/system/logstorage/incomplete`][/api/V/system/logstorage/incomplete] - List all executions with incomplete logstorage.
+    - [`/api/17/system/logstorage/incomplete/resume`][/api/V/system/logstorage/incomplete/resume] - Resume incomplete log storage processing.
+    
+* Updated Endpoints.
+    - [`/api/17/project/[PROJECT]/jobs`][/api/V/project/[PROJECT]/jobs] 
+        - Response now includes whether a job is enabled, scheduled, schedule is enabled, and in Cluster mode includes the cluster mode server UUID of the schedule owner, and whether that is the current server or not.
+        - add `?scheduledFilter=true/false` returns scheduled/unscheduled jobs only
+        - and `?serverNodeUUIDFilter=[uuid]` returns scheduled jobs owned by the given cluster member
+    - [`/api/17/scheduler/takeover`][/api/V/scheduler/takeover]
+        - Response now includes previous scheduler owner UUID for jobs.
+    - [`/api/17/scheduler/takeover`][/api/V/scheduler/takeover] - Can specify a single job ID to takeover.
+
+**Version 16**:
+
+* New Endpoints.
+    - [`/api/16/jobs/execution/enable`][/api/V/jobs/execution/enable] - Enable execution for multiple jobs
+    - [`/api/16/jobs/execution/disable`][/api/V/jobs/execution/disable] - Disable execution for multiple jobs
+    - [`/api/16/jobs/schedule/enable`][/api/V/jobs/schedule/enable] - Enable schedule for multiple jobs
+    - [`/api/16/jobs/schedule/disable`][/api/V/jobs/schedule/disable] - Disable schedule for multiple jobs
+
+
+**Version 15**:
+
+* New Endpoints.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/plugins`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugins] - List SCM plugins for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input] - Get SCM plugin setup input fields.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup] - Setup SCM for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable] - Enable SCM for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable] - Disable SCM for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/status`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/status] - Get SCM status for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/config`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/config] - Get SCM config for a project.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input] - Get Project SCM Action Input Fields.
+    - [`/api/15/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]`][/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]] - Perform SCM action for a project.
+    
+    - [`/api/15/job/[ID]/scm/[INTEGRATION]/status`][/api/V/job/[ID]/scm/[INTEGRATION]/status] - Get SCM status for a Job.
+    - [`/api/15/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]`][/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]] - Perform SCM action for a Job.
+    - [`/api/15/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input`][/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input] - Get Job SCM Action Input Fields
+    
 
 **Version 14**:
 
@@ -74,6 +123,10 @@ Changes introduced by API Version number:
     - [`/api/14/system/executions/disable`][/api/V/system/executions/disable] - Disable executions (PASSIVE mode)
     - [`/api/14/system/acl/*`][/api/V/system/acl/*] - Manage system ACLs
     - [`/api/14/project/[PROJECT]/acl/*`][/api/V/project/[PROJECT]/acl/*] - Manage project ACLs
+    - [`/api/14/job/[ID]/execution/enable`][/api/V/job/[ID]/execution/enable] - Enable executions for a job
+    - [`/api/14/job/[ID]/execution/disable`][/api/V/job/[ID]/execution/disable] - Disable executions for a job
+    - [`/api/14/job/[ID]/schedule/enable`][/api/V/job/[ID]/schedule/enable] - Enable scheduling for a job
+    - [`/api/14/job/[ID]/schedule/disable`][/api/V/job/[ID]/schedule/disable] - Disable scheduling for a job
 * New Endpoints, replacing deprecated versions:
     - [`/api/14/project/[PROJECT*]/executions/running`][/api/V/project/[PROJECT*]/executions/running]
     - [`/api/14/project/[PROJECT]/executions`][/api/V/project/[PROJECT]/executions]
@@ -623,6 +676,7 @@ Success response, with included system info and stats in this format:
         </memory>
         <scheduler>
             <running>0</running>
+            <threadPoolSize>10</threadPoolSize>
         </scheduler>
         <threads>
             <active>24</active>
@@ -691,7 +745,8 @@ Success response, with included system info and stats in this format:
         "total": 527958016
       },
       "scheduler": {
-        "running": 0
+        "running": 0,
+        "threadPoolSize": 10
       },
       "threads": {
         "active": 35
@@ -809,9 +864,205 @@ The `memory` section describes memory usage in bytes:
 
 :   Number of running jobs in the scheduler
 
+`scheduler/threadPoolSize`
+
+:   Size of the scheduler threadPool: maximum number of concurrent Rundeck executions
+
 `threads/active`
 
 :   Number of active Threads in the JVM
+
+## Log Storage
+
+### Log Storage Info
+
+Get Log Storage information and stats.
+
+**Request:**
+
+    GET /api/17/system/logstorage
+
+**Response:**
+
+Success response, with log storage info and stats in this format:
+
+`Content-Type: application/xml`:
+
+~~~ {.xml}
+<logStorage enabled="true" pluginName="NAME">
+  <succeededCount>349</succeededCount>
+  <failedCount>0</failedCount>
+  <queuedCount>0</queuedCount>
+  <totalCount>349</totalCount>
+  <incompleteCount>0</incompleteCount>
+  <missingCount>0</missingCount>
+</logStorage>
+~~~
+
+`Content-Type: application/json`:
+
+~~~ {.json}
+{
+  "enabled": true,
+  "pluginName": "NAME",
+  "succeededCount": 369,
+  "failedCount": 0,
+  "queuedCount": 0,
+  "totalCount": 369,
+  "incompleteCount": 0,
+  "missingCount": 0
+}
+~~~
+
+`enabled`
+
+:   True if a plugin is configured
+
+`pluginName`
+
+:   Name of the configured plugin
+
+`succeededCount`
+
+:   Number of successful storage requests
+
+`failedCount`
+
+:   Number of failed storage requests
+
+`queuedCount`
+
+:   Number of queued storage requests
+
+`totalCount`
+
+:   Total number of storage requests (currently queued plus previously processed)
+
+`incompleteCount`
+
+:   Number of storage requests which have not completed successfully
+
+`missingCount`
+
+:   Number of executions for this cluster node which have no associated storage requests
+
+### List Executions with Incomplete Log Storage
+
+List all executions with incomplete log storage.
+
+**Request:**
+
+    GET /api/17/system/logstorage/incomplete
+
+**Response:**
+
+`Content-Type: application/xml`:
+
+```xml
+<logstorage>
+  <incompleteExecutions total="[#]" max="20" offset="0">
+    <execution id="[EXECID]" project="[PROJECT]" href="[API HREF]" permalink="[GUI HREF]">
+      <storage incompleteFiletypes="[TYPES]" queued="true/false" failed="true/false" date="[DATE]" localFilesPresent="true/false">
+        <errors>
+          <message>[error message]</message>
+          <message>[error message...]</message>
+        </errors>
+    </storage>
+    </execution>
+    ...
+</logstorage>
+```
+
+`Content-Type: application/json`:
+
+```json
+{
+  "total": #,
+  "max": 20,
+  "offset": 0,
+  "executions": [
+    {
+      "id": [EXECID],
+      "project": "[PROJECT]",
+      "href": "[API HREF]",
+      "permalink": "[GUI HREF]",
+      "storage": {
+        "localFilesPresent": true/false,
+        "incompleteFiletypes": "[TYPES]",
+        "queued": true/false,
+        "failed": true/false,
+        "date": "[DATE]"
+      },
+      "errors": ["message","message..."]
+    },
+    ...
+    ]
+}
+```
+
+`total`, `max`, `offset` (paging information)
+
+:   Total number of executions with incomplete log data storage, maximum returned in the response, offset of first result.
+
+`id`
+
+:   Execution ID
+
+`project`
+
+:   Project Name
+
+`href`
+
+:   API URL for Execution
+
+`permalink`
+
+:   GUI URL for Execution
+
+`incompleteFiletypes`
+
+:   Comma-separated list of filetypes which have not be uploaded, e.g. `rdlog,state.json`. Types are `rdlog` (log output), `state.json` (workflow state data), `execution.xml` (execution definition)
+
+`queued`
+
+:   True if the log data storage is queued to be processed.
+
+`failed`
+
+:   True if the log data storage was processed but failed without completion.
+
+`date`
+
+:   Date when log data storage was first processed. (W3C date format.)
+
+`localFilesPresent`
+
+:   True if all local files (`rdlog` and `state.json`) are available for upload.  False if one of them is not proesent on disk.
+
+### Resume Incomplete Log Storage
+
+Resume processing incomplete Log Storage uploads.
+
+**Request:**
+
+    POST /api/17/system/logstorage/incomplete/resume
+
+**Response:**
+
+`Content-Type: application/xml`:
+
+```xml
+<logStorage resumed='true' />
+```
+
+`Content-Type: application/json`:
+
+~~~ {.json}
+{
+  "resumed": true
+}
+~~~
 
 ## Execution Mode ##
 
@@ -883,6 +1134,8 @@ This endpoint can take over the schedule of certain jobs based on the input:
 Additionally, you can specify a `project` name to take over only jobs matching
 the given project name, in combination with the server options.
 
+Alternately, specify a job ID to takeover only a single Job's schedule.
+
 **Request**
 
     PUT /api/14/scheduler/takeover
@@ -894,10 +1147,12 @@ Either XML or JSON request.
 XML Document containing:
 
 * `<takeoverSchedule>` top level element
-  * required `<server>` element, with one of required attributes:
+  * optional `<server>` element, with one of required attributes:
     * `uuid` server UUID to take over from
     * `all` value of `true` to take over from all servers
   * optional `<project>` element, required attribute: `name`
+  * optional `<job`> element, with attribute:
+    * `id` Job UUID to take over.
 
 Example for a single server UUID:
 
@@ -924,16 +1179,26 @@ Example for all servers and a specific project:
 </takeoverSchedule>
 ~~~
 
+Example for a single Job:
+
+~~~ {.xml}
+<takeoverSchedule>
+    <job id="[UUID]"/>
+</takeoverSchedule>
+~~~
+
 **Note**: The `<server>` element can be the root of the document request for backwards compatibility.
 
 `Content-Type: application/json`:
 
 A JSON object.
 
-* required `server` entry, with one of these required entries:
+* optional `server` entry, with one of these required entries:
     * `uuid` server UUID to take over from
     * `all` value of `true` to take over from all servers
 * optional `project` entry, specifying a project name
+* optional `job` entry, with required entry:
+    * `id` Job UUID
 
 ~~~ {.json}
 {
@@ -945,18 +1210,30 @@ A JSON object.
 }
 ~~~
 
+Specify a job id:
+
+~~~ {.json}
+{
+  "job": {
+    "id": "[UUID]"
+  }
+}
+~~~
+
 **Response:**
 
 If request was XML, then Standard API response containing the following additional elements:
 
-* `self`
-    * `server`
-        *  `@uuid` - this cluster server's uuid
 *  `takeoverSchedule`
+    * `self`
+        * `server`
+            *  `@uuid` - this cluster server's UUID
     *  `server`
-        *  `@uuid` - requested server uuid to take over, if specifed in the request
+        *  `@uuid` - requested server UUID to take over, if specifed in the request
         *  `@all` - `true` if requested
     *  `project` - name of project, if specified in request
+    *  `job`
+        *  `@id` - requested job UUID to take over, if specifed in the request
     *  `jobs` - set of successful and failed jobs taken over
         *  `successful`/`failed` - job set
             *  `@count` number of jobs in the set
@@ -964,6 +1241,7 @@ If request was XML, then Standard API response containing the following addition
                 *  `@id` Job ID
                 *  `@href` Job API HREF
                 *  `@permalink` Job GUI HREF
+                *  `@previous-owner` UUID of the cluster server that was the previous schedule owner
 
 Example XML Response, when `uuid` was specified:
 
@@ -977,10 +1255,12 @@ Example XML Response, when `uuid` was specified:
       <successful count='2'>
         <job id='a1aa53ac-73a6-4ead-bbe4-34afbff8e057'
         href='http://localhost:9090/api/14/job/a1aa53ac-73a6-4ead-bbe4-34afbff8e057'
-        permalink='http://localhost:9090/rundeck/job/show/a1aa53ac-73a6-4ead-bbe4-34afbff8e057' />
+        permalink='http://localhost:9090/rundeck/job/show/a1aa53ac-73a6-4ead-bbe4-34afbff8e057'
+        previous-owner="8F3D5976-2232-4529-847B-8E45764608E3" />
         <job id='116e2025-7895-444a-88f7-d96b4f19fdb3'
         href='http://localhost:9090/api/14/job/116e2025-7895-444a-88f7-d96b4f19fdb3'
-        permalink='http://localhost:9090/rundeck/job/show/116e2025-7895-444a-88f7-d96b4f19fdb3' />
+        permalink='http://localhost:9090/rundeck/job/show/116e2025-7895-444a-88f7-d96b4f19fdb3'
+        previous-owner="8F3D5976-2232-4529-847B-8E45764608E3" />
       </successful>
       <failed count='0'></failed>
     </jobs>
@@ -1026,12 +1306,14 @@ JSON response for `uuid` specified:
         {
           "href": "http://dignan:4440/api/14/job/a1aa53ac-73a6-4ead-bbe4-34afbff8e057",
           "permalink": "http://dignan:4440/job/show/a1aa53ac-73a6-4ead-bbe4-34afbff8e057",
-          "id": "a1aa53ac-73a6-4ead-bbe4-34afbff8e057"
+          "id": "a1aa53ac-73a6-4ead-bbe4-34afbff8e057",
+          "previous-owner": "8F3D5976-2232-4529-847B-8E45764608E3"
         },
         {
           "href": "http://dignan:4440/api/14/job/116e2025-7895-444a-88f7-d96b4f19fdb3",
           "permalink": "http://dignan:4440/job/show/116e2025-7895-444a-88f7-d96b4f19fdb3",
-          "id": "116e2025-7895-444a-88f7-d96b4f19fdb3"
+          "id": "116e2025-7895-444a-88f7-d96b4f19fdb3",
+          "previous-owner": "8F3D5976-2232-4529-847B-8E45764608E3"
         }
       ],
       "total": 2
@@ -1096,6 +1378,32 @@ JSON response for `project` specified:
   "success": true
 }
 ~~~~~~~~~~
+
+### List Scheduled Jobs For a Cluster Server
+
+List the scheduled Jobs with their schedule owned by the cluster server with the specified UUID.
+
+**Request**
+
+    GET /api/17/scheduler/server/[UUID]/jobs
+
+**Response**
+
+The same format as [Listing Jobs](#listing-jobs).
+
+
+### List Scheduled Jobs For this Cluster Server
+
+List the scheduled Jobs with their schedule owned by the target cluster server.
+
+**Request**
+
+    GET /api/17/scheduler/jobs
+
+**Response**
+
+The same format as [Listing Jobs](#listing-jobs).
+
 
 ## ACLs
 
@@ -1351,6 +1659,8 @@ The following parameters can also be used to narrow down the result set.
 * `jobFilter`: specify a filter for the job Name. Matches any job name that contains this value.
 * `jobExactFilter`: specify an exact job name to match.
 * `groupPathExact`: specify an exact group path to match.  Set to the special value "-" to match the top level jobs only
+* `scheduledFilter`: `true/false` specify whether to return only scheduled or only not scheduled jobs.
+* `serverNodeUUIDFilter`: Value: a UUID. In cluster mode, use to select scheduled jobs assigned to the server with given UUID.
 
 Note: If neither `groupPath` nor `groupPathExact` are specified, then the default `groupPath` value of "*" will be used (matching jobs in all groups).  `groupPathExact` cannot be combined with `groupPath`.  You can set either one to "-" to match only the top-level jobs which are not within a group.
 
@@ -1359,7 +1669,9 @@ Note: If neither `groupPath` nor `groupPathExact` are specified, then the defaul
 `Content-Type: application/xml`:  An Item List of `jobs`. Each `job` is of the form:
 
 ~~~~~~~~~~ {.xml}
-<job id="ID" href="[API url]" permalink="[GUI URL]">
+<job id="ID" href="[API url]" permalink="[GUI URL]" scheduled="true/false" scheduleEnabled="true/false"
+   enabled="true/false"
+   >
     <name>Job Name</name>
     <group>Job Name</group>
     <project>Project Name</project>
@@ -1378,10 +1690,61 @@ Note: If neither `groupPath` nor `groupPathExact` are specified, then the defaul
     "project": "[project]",
     "description": "...",
     "href": "[API url]",
-    "permalink": "[GUI url]"
+    "permalink": "[GUI url]",
+    "scheduled": true/false,
+    "scheduleEnabled": true/false,
+    "enabled": true/false
   }
 ]
 ~~~~~~~~~~~~
+
+**Since v17**:
+
+* `scheduled` indicates whether the job has a schedule
+* `scheduleEnabled` indicates whether the job's schedule is enabled or not
+* `enabled` indicates whether executions are enabled or not
+
+In Cluster mode, additional information about what server UUID is the schedule owner will be included:
+
+* `serverNodeUUID` UUID of the schedule owner server for this job
+* `serverOwner` boolean value whether the target server is the owner, `true/false`.
+
+`Content-Type: application/xml`: 
+
+~~~~~~~~~~ {.xml}
+<job id="ID" href="[API url]" permalink="[GUI URL]" scheduled="true/false" scheduleEnabled="true/false" 
+  enabled="true/false"
+  serverNodeUUID="[UUID]" 
+  serverOwner="true/false"
+  >
+    <name>Job Name</name>
+    <group>Job Name</group>
+    <project>Project Name</project>
+    <description>...</description>
+</job>
+~~~~~~~~~~~~
+
+`Content-Type: application/json`
+
+~~~~~~~~~~ {.json}
+[
+  {
+    "id": "[UUID]",
+    "name": "[name]",
+    "group": "[group]",
+    "project": "[project]",
+    "description": "...",
+    "href": "[API url]",
+    "permalink": "[GUI url]",
+    "scheduled": true/false,
+    "scheduleEnabled": true/false,
+    "enabled": true/false,
+    "serverNodeUUID": "[UUID]",
+    "serverOwner": true/false
+  }
+]
+~~~~~~~~~~~~
+
 
 ### Running a Job
 
@@ -1646,6 +2009,258 @@ Each `deleteJobRequest` under the `failed` section will contain:
 ~~~~~~ {.json}
 {
   "requestCount": #integer#,
+  "allsuccessful": true/false,
+  "succeeded": [...],
+  "failed":[...]
+}
+~~~~~~
+
+The list of succeeded/failed will contain objects of this form:
+
+~~~~~~ {.json}
+{
+  "id": "[UUID]",
+  "errorCode": "(error code, see above)",
+  "message": "(success or failure message)"
+}
+~~~~~~
+
+### Enable Executions for a Job
+
+Enable executions for a job. (ACL requires `toggle_execution` action for a job.)
+
+**Request:**
+
+    POST /api/14/job/[ID]/execution/enable
+
+**Response:**
+
+`application/xml`
+
+~~~{.xml}
+<success>true</success>
+~~~
+
+`application/json`
+
+~~~{.json}
+{"success":true}
+~~~
+
+### Disable Executions for a Job
+
+Disable all executions for a job (scheduled or manual). (ACL requires `toggle_execution` action for a job.)
+
+**Request:**
+
+    POST /api/14/job/[ID]/execution/disable
+
+**Response:**
+
+(See [Enable Executions for a Job](#enable-executions-for-a-job).)
+
+### Enable Scheduling for a Job
+
+Enable the schedule for a job. (ACL requires `toggle_schedule` action for a job.)
+
+**Request:**
+
+    POST /api/14/job/[ID]/schedule/enable
+
+**Response:**
+
+(See [Enable Executions for a Job](#enable-executions-for-a-job).)
+
+### Disable Scheduling for a Job
+
+Disable the schedule for a job. (ACL requires `toggle_schedule` action for a job.)
+
+**Request:**
+
+    POST /api/14/job/[ID]/schedule/disable
+
+**Response:**
+
+(See [Enable Executions for a Job](#enable-executions-for-a-job).)
+
+### Bulk Toggle Job Execution
+
+Toggle whether executions are enabled for a set of jobs. (ACL requires `toggle_execution` action for each job.)
+
+Executions will be enabled or disabled, depending on the URL used:
+
+**Request:**
+
+    POST /api/14/jobs/execution/enable
+    POST /api/14/jobs/execution/disable
+
+Query parameters:
+
+* `ids`: The Job IDs to delete, can be specified multiple times
+* `idlist`: The Job IDs to delete as a single comma-separated string.
+
+Or JSON/XML content:
+
+`Content-Type: application/json`
+
+~~~~~ {.json}
+{
+  "ids": [
+    "fefa50e1-2265-47af-b101-d4bbaa3ba21c",
+    "f07e2311-4dae-40ca-bdfa-412bd223f863"
+  ],
+  "idlist":"49336998-21a3-42c7-8da3-a855587982e0,a387f77f-a623-45dc-967f-746a2e3f6686"
+}
+~~~~~
+
+Note: you can combine `ids` with `idlist`.
+
+**Response:**
+
+If successful, then the `result` will contain a `toggleExecution` element with two sections of results, `succeeded` and `failed`:
+
+~~~~~~~~~~ {.xml}
+<toggleExecution enabled="true" requestCount="#" allsuccessful="true/false">
+    <succeeded count="1">
+        <toggleExecutionResult id="[job ID]">
+            <message>[message]</message>
+        </toggleExecutionResult>
+    </succeeded>
+    <failed count="1">
+        <toggleExecutionResult id="[job ID]" errorCode="[code]">
+            <error>[message]</error>
+        </toggleExecutionResult>
+    </failed>
+</toggleExecution>
+~~~~~~~~~~
+
+
+`toggleExecution` has these attributes:
+
+* `enabled`: `true` or `false`, depending on whether `enable` or `disable` was requested.
+* `requestCount`: the number of job IDs that were in the request
+* `allsuccessful`: true/false: true if all modifications were successful, false otherwise.
+
+The response may contain only one of `succeeded` or `failed`, depending on the result.
+
+The `succeeded` and `failed` sections contain multiple `toggleExecutionResult` elements.  
+
+Each `toggleExecutionResult` under the `succeeded` section will contain:
+
+* `id` attribute - the Job ID
+* `message` sub-element - result message for the request
+
+
+Each `toggleExecutionResult` under the `failed` section will contain:
+
+* `id` attribute - the Job ID
+* `error` sub-element - result error message for the request
+* `errorCode` attribute - a code indicating the type of failure, currently one of `failed`, `unauthorized` or `notfound`.
+
+`application/json` response:
+
+
+~~~~~~ {.json}
+{
+  "requestCount": #integer#,
+  "enabled": true/false,
+  "allsuccessful": true/false,
+  "succeeded": [...],
+  "failed":[...]
+}
+~~~~~~
+
+The list of succeeded/failed will contain objects of this form:
+
+~~~~~~ {.json}
+{
+  "id": "[UUID]",
+  "errorCode": "(error code, see above)",
+  "message": "(success or failure message)"
+}
+~~~~~~
+
+### Bulk Toggle Job Schedules
+
+Toggle whether schedules are enabled for a set of jobs. (ACL requires `toggle_schedule` action for each job.)
+
+Schedules will be enabled or disabled, depending on the URL used:
+
+**Request:**
+
+    POST /api/14/jobs/schedule/enable
+    POST /api/14/jobs/schedule/disable
+
+Query parameters:
+
+* `ids`: The Job IDs to delete, can be specified multiple times
+* `idlist`: The Job IDs to delete as a single comma-separated string.
+
+Or JSON/XML content:
+
+`Content-Type: application/json`
+
+~~~~~ {.json}
+{
+  "ids": [
+    "fefa50e1-2265-47af-b101-d4bbaa3ba21c",
+    "f07e2311-4dae-40ca-bdfa-412bd223f863"
+  ],
+  "idlist":"49336998-21a3-42c7-8da3-a855587982e0,a387f77f-a623-45dc-967f-746a2e3f6686"
+}
+~~~~~
+
+Note: you can combine `ids` with `idlist`.
+
+**Response:**
+
+If successful, then the `result` will contain a `toggleSchedule` element with two sections of results, `succeeded` and `failed`:
+
+~~~~~~~~~~ {.xml}
+<toggleSchedule enabled="true" requestCount="#" allsuccessful="true/false">
+    <succeeded count="1">
+        <toggleScheduleResult id="[job ID]">
+            <message>[message]</message>
+        </toggleScheduleResult>
+    </succeeded>
+    <failed count="1">
+        <toggleScheduleResult id="[job ID]" errorCode="[code]">
+            <error>[message]</error>
+        </toggleScheduleResult>
+    </failed>
+</toggleSchedule>
+~~~~~~~~~~
+
+
+`toggleSchedule` has these attributes:
+
+* `enabled`: `true` or `false`, depending on whether `enable` or `disable` was requested.
+* `requestCount`: the number of job IDs that were in the request
+* `allsuccessful`: true/false: true if all modifications were successful, false otherwise.
+
+The response may contain only one of `succeeded` or `failed`, depending on the result.
+
+The `succeeded` and `failed` sections contain multiple `toggleScheduleResult` elements.  
+
+Each `toggleScheduleResult` under the `succeeded` section will contain:
+
+* `id` attribute - the Job ID
+* `message` sub-element - result message for the request
+
+
+Each `toggleScheduleResult` under the `failed` section will contain:
+
+* `id` attribute - the Job ID
+* `error` sub-element - result error message for the request
+* `errorCode` attribute - a code indicating the type of failure, currently one of `failed`, `unauthorized` or `notfound`.
+
+`application/json` response:
+
+
+~~~~~~ {.json}
+{
+  "requestCount": #integer#,
+  "enabled": true/false,
   "allsuccessful": true/false,
   "succeeded": [...],
   "failed":[...]
@@ -2043,9 +2658,11 @@ The following parameters can also be used to narrow down the result set.
         * `w`: week
         * `m`: month
         * `y`: year
-        So a value of "2w" would return executions that completed within the last two weeks.
+
+        So a value of `2w` would return executions that completed within the last two weeks.
+    * `olderFilter`: (same format as `recentFilter`) return executions that completed before the specified relative period of time.  E.g. a value of `30d` returns executions older than 30 days.
     * `begin`: Specify exact date for earliest execution completion time
-    * `end`: Specify exact date for latest xecution completion time
+    * `end`: Specify exact date for latest execution completion time
 * `adhoc`: "true/false", if true, include only Adhoc executions, if false return only Job executions. By default any matching executions are returned, however if you use any of the Job filters below, then only Job executions will be returned.
 
 The format for the `end`, and `begin` filters is either:  a unix millisecond timestamp, or a W3C dateTime string in the format "yyyy-MM-ddTHH:mm:ssZ".
@@ -3347,6 +3964,25 @@ Export a zip archive of the project.  Requires `export` authorization for the pr
 
 Response content type is `application/zip`
 
+Optional parameters:
+
+* `executionIds` a list (comma-separated) of execution IDs.  If this is specified then the archive will
+contain *only* executions that are specified, and will not contain Jobs, ACLs, or project configuration/readme files.
+    * optionally use `POST` method with with `application/x-www-form-urlencoded` content for large lists of execution IDs
+    * optionally, specify `executionIds` multiple times, with a single ID per entry.
+
+GET Examples:
+
+    GET /api/11/project/AlphaProject/export?executionIds=1,4,9
+    GET /api/11/project/AlphaProject/export?executionIds=1&executionIds=4&executionIds=9
+
+Post:
+
+    POST /api/11/project/AlphaProject/export
+    Content-Type: application/x-www-form-urlencoded
+
+    executionIds=1&executionIds=4&executionIds=9&...
+
 ### Project Archive Import ###
 
 **Request:** 
@@ -3862,107 +4498,787 @@ Using set logic, if "A" is the set of all resources, "X" is the set of all resou
 * when `exclude-precedence=false` then the result is:
     * $( A - X ) \cup I$
 
-## Takeover Schedule in Cluster Mode
 
-**INCUBATOR**: this endpoint is available under the `/incubator` top-level path to indicate it is under development, and the specific behavior may change before it is finalized, or even completely removed.
 
-Tell a Rundeck server in cluster mode to claim all scheduled jobs from another cluster server.
+## SCM
+
+Rundeck SCM Plugins can be used to synchronize Job definitions with an external Source Control Management repository.
+
+Currently Rundeck includes a single built-in plugin for Git repositories.
+
+There are two "integration" types of SCM Plugins: `import` and `export`, and they are managed separately.
+
+A Project can be configured with a single Import and Export plugin.  After setting up these plugins, Project and Job level "status" can be read.  Changes to Jobs within a project affect the status for Import or Export.
+
+Plugins provide "actions" which are available based on the Project or Job status.  For example, a plugin can provide a "commit" action for a Job, which allows a user to save the changes for the job.
+
+The specific actions, and their behaviors depend on the plugin.  The actions can be listed and performed via the API.
+
+### List SCM Plugins
+
+Lists the available plugins for the specified integration.  Each plugin is identified by a `type` name.
 
 **Request**
 
-    PUT /api/7/incubator/jobs/takeoverSchedule
+    GET /api/15/project/[PROJECT]/scm/[INTEGRATION]/plugins
 
-Required Content:
+**Response**
 
-One of the following:
+A list of plugin description.
 
-* `Content-Type: application/xml`:
+Each plugin has these properties:
 
-~~~ {.xml}
-<server uuid="[UUID]"/>
-~~~
+* `type` identifier for the plugin
+* `configured` true/false whether a configuration is stored for the plugin
+* `enabled` true/false whether the plugin is enabled
+* `title` display title for the plugin
+* `description` descriptive text for the plugin
 
-* `Content-Type: application/json`:
 
-~~~ {.json}
-{ server: { uuid: "[UUID]" } }
-~~~
-
-**Response:**
-
-If request was XML, then Standard API response containing the following additional elements:
-
-* `self`
-    * `server`
-        *  `@uuid` - this cluster server's uuid
-*  `takeoverSchedule`
-    *  `server`
-        *  `@uuid` - requested server uuid to take over
-    *  `jobs` - set of successful and failed jobs taken over
-        *  `successful`/`failed` - job set
-            *  `@count` number of jobs in the set
-            *  `job` - one element for each job
-                *  `@id` Job ID
-                *  `@href` Job API HREF
-                *  `@permalink` Job GUI HREF
-
-Example XML Response:
+`Content-Type: application/xml`:
 
 ~~~~~~~~~~ {.xml}
-<takeoverSchedule>
-    <self>
-      <server uuid='C677C663-F902-4B97-B8AC-4AA57B58DDD6' />
-    </self>
-    <server uuid='8F3D5976-2232-4529-847B-8E45764608E3' />
-    <jobs total='2'>
-      <successful count='2'>
-        <job id='a1aa53ac-73a6-4ead-bbe4-34afbff8e057'
-        href='http://localhost:9090/api/14/job/a1aa53ac-73a6-4ead-bbe4-34afbff8e057'
-        permalink='http://localhost:9090/rundeck/job/show/a1aa53ac-73a6-4ead-bbe4-34afbff8e057' />
-        <job id='116e2025-7895-444a-88f7-d96b4f19fdb3'
-        href='http://localhost:9090/api/14/job/116e2025-7895-444a-88f7-d96b4f19fdb3'
-        permalink='http://localhost:9090/rundeck/job/show/116e2025-7895-444a-88f7-d96b4f19fdb3' />
-      </successful>
-      <failed count='0'></failed>
-    </jobs>
-</takeoverSchedule>
+<scmPluginList>
+  <integration>[$integration]</integration>
+  <plugins>
+    <scmPluginDescription>
+      <configured>[$boolean]</configured>
+      <description>[$string]</description>
+      <enabled>[$boolean]</enabled>
+      <title>[$string]</title>
+      <type>[$type]</type>
+    </scmPluginDescription>
+  </plugins>
+</scmPluginList>
 ~~~~~~~~~~
 
-If request was JSON, then the following JSON:
+`Content-Type: application/json`:
 
 ~~~~~~~~~~ {.json}
+{
+  "integration": "$integration",
+  "plugins": [
     {
-      "takeoverSchedule": {
-        "jobs": {
-          "failed": [],
-          "successful": [
-            {
-              "href": "http://dignan:4440/api/14/job/a1aa53ac-73a6-4ead-bbe4-34afbff8e057",
-              "permalink": "http://dignan:4440/job/show/a1aa53ac-73a6-4ead-bbe4-34afbff8e057",
-              "id": "a1aa53ac-73a6-4ead-bbe4-34afbff8e057"
-            },
-            {
-              "href": "http://dignan:4440/api/14/job/116e2025-7895-444a-88f7-d96b4f19fdb3",
-              "permalink": "http://dignan:4440/job/show/116e2025-7895-444a-88f7-d96b4f19fdb3",
-              "id": "116e2025-7895-444a-88f7-d96b4f19fdb3"
-            }
-          ],
-          "total": 2
-        },
-        "server": {
-          "uuid": "8F3D5976-2232-4529-847B-8E45764608E3"
-        }
-      },
-      "self": {
-        "server": {
-          "uuid": "C677C663-F902-4B97-B8AC-4AA57B58DDD6"
-        }
-      },
-      "message": "Schedule Takeover successful for 2/2 Jobs.",
-      "apiversion": 14,
-      "success": true
+      "configured": $boolean,
+      "description": "$string",
+      "enabled": $boolean,
+      "title": "$string",
+      "type": "$type"
     }
+  ]
+}
 ~~~~~~~~~~
+
+
+### Get SCM Plugin Input Fields
+
+List the input fields for a specific plugin.  The `integration` and `type` must be specified.
+
+The response will list each input field.
+
+**Request**
+
+    GET /api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input
+
+**Response**
+
+Input fields have a number of properties:
+
+* `name` identifier for the field, used when submitting the input values.
+* `defaultValue` a default value if the input does not specify one
+* `description` textual description
+* `renderOptions` a key/value map of options, such as declaring that GUI display the input as a password field.
+* `required` true/false whether the input is required
+* `scope` 
+* `title` display title for the field
+* `type` data type of the field: `String`, `Integer`, `Select` (multi-value), `FreeSelect` (open-ended multi-value), `Boolean` (true/false)
+* `values` if the type is `Select` or `FreeSelect`, a list of string values to choose from
+
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmPluginSetupInput>
+  <integration>$integration</integration>
+  <type>$type</type>
+  <fields>
+    <scmPluginInputField>
+      <defaultValue>$string</defaultValue>
+      <description>$string</description>
+      <name>$string</name>
+      <renderingOptions>
+        <entry key="$string">$string</entry>
+        <!-- <entry ... -->
+      </renderingOptions>
+      <required>$boolean</required>
+      <scope>$string</scope>
+      <title>$string</title>
+      <type>$string</type>
+      <values>
+        <!-- may be empty -->
+        <string>$string</string>
+        <string>$string</string>
+        <!-- <string ... -->
+      </values>
+    </scmPluginInputField>
+    <!-- 
+    <scmPluginInputField>...</scmPluginInputField>
+     -->
+  </fields>
+</scmPluginSetupInput>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "fields": [
+    {
+      "defaultValue": "$string",
+      "description": "$string",
+      "name": "$string",
+      "renderingOptions": {
+        "$string": "$string"
+      },
+      "required": $boolean,
+      "scope": "$string",
+      "title": "$string",
+      "type": "$string",
+      "values": null or array
+    }
+    //...
+
+  ],
+  "integration": "$integration",
+  "type": "$type"
+}
+~~~~~~~~~~
+
+### Setup SCM Plugin for a Project
+
+Configure and enable a plugin for a project.  
+
+The request body is expected to contain entries for all of the `required` input fields for the plugin.
+
+If a validation error occurs with the configuration, then the response will include detail about the errors.
+
+**Request**
+
+    POST /api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup
+
+Content:
+
+`Content-Type: application/xml`
+
+~~~~~ {.xml}
+<scmPluginConfig>
+    <config>
+        <entry key="key">value</entry>
+        <entry key="key2">value2</entry>
+        <!-- ... -->
+    </config>
+</scmPluginConfig>
+~~~~~
+
+`Content-Type: application/json`
+
+~~~~~ {.json}
+{
+    "config":{
+        "key":"value",
+        "key2":"value2..."
+    }
+}
+~~~~~
+
+
+**Response**
+
+If a validation error occurs, the response will include information about the result.
+
+    HTTP/1.1 400 Bad Request
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmActionResult>
+  <message>Some input values were not valid.</message>
+  <nextAction />
+  <success>false</success>
+  <validationErrors>
+    <entry key="dir">required</entry>
+    <entry key="url">required</entry>
+  </validationErrors>
+</scmActionResult>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "message": "Some input values were not valid.",
+  "nextAction": null,
+  "success": false,
+  "validationErrors": {
+    "dir": "required",
+    "url": "required"
+  }
+}
+~~~~~~~~~~
+
+If the result is successul:
+
+    HTTP/1.1 200 OK
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmActionResult>
+  <message>$string</message>
+  <success>true</success>
+  <nextAction />
+  <validationErrors/>
+</scmActionResult>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "message": "$string",
+  "nextAction": null,
+  "success": true,
+  "validationErrors": null
+}
+~~~~~~~~~~
+
+If a follow-up **Action** is expected to be called, the action ID will be identified by the `nextAction` value.
+
+See [Get Project SCM Status](#get-project-scm-status).
+
+### Enable SCM Plugin for a Project
+
+Enable a plugin that was previously configured. (Idempotent)
+
+**Request**
+
+    POST /api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable
+
+No content body is expected.
+
+**Response**
+
+Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-project).
+
+### Disable SCM Plugin for a Project
+
+Disable a plugin. (Idempotent)
+
+**Request**
+
+    POST /api/15/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable
+
+No content body is expected.
+
+**Response**
+
+Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-project).
+
+### Get Project SCM Status
+
+Get the SCM plugin status and available actions for the project.
+
+**Request**
+
+    GET /api/15/project/[PROJECT]/scm/[INTEGRATION]/status
+
+**Response**
+
+If no plugin is configured:
+
+    HTTP/1.1 404 Not Found
+
+Otherwise:
+
+    HTTP/1.1 200 OK
+
+The plugin status has these properties:
+
+* `actions` empty, or a list of action ID strings
+* `integration` the integration
+* `message` a string indicating the status message
+* `synchState` a value indicating the state
+* `project` project name
+
+Import plugin values for `synchState`:
+
+* `CLEAN` - no changes
+* `UNKNOWN` - status unknown
+* `REFRESH_NEEDED` - plugin needs to refresh
+* `IMPORT_NEEDED` - some changes need to be imported
+* `DELETE_NEEDED` - some jobs need to be deleted
+
+Export plugin values for `synchState`:
+
+* `CLEAN` - no changes
+* `REFRESH_NEEDED` - plugin needs to refresh
+* `EXPORT_NEEDED` - some changes need to be exported
+* `CREATE_NEEDED` - some jobs need to be added to the repo
+
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmProjectStatus>
+  
+  <actions>
+    <string>action1</string>
+    <string>action2</string>
+  </actions>
+  
+  <integration>$integration</integration>
+  <message>$string</message>
+  <project>$project</project>
+  <synchState>$state</synchState>
+</scmProjectStatus>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "actions": ['action1','action2',..],
+  "integration": "$integration",
+  "message": null,
+  "project": "$project",
+  "synchState": "$state"
+}
+~~~~~~~~~~
+
+### Get Project SCM Config
+
+Get the configuration properties for the current plugin.
+
+**Request**
+
+    GET /api/15/project/[PROJECT]/scm/[INTEGRATION]/config
+
+**Response**
+
+If no plugin for the given integration is configured for the project, a `404` response is sent:
+
+    HTTP/1.1 404 Not Found
+
+Otherwise the response contains:
+
+* `config` a set of key/value pairs for the configuration
+* `enabled` true/false if it is enabled
+* `integration` integration name
+* `project` project name
+* `type` plugin type name
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmProjectPluginConfig>
+  <config>
+    <entry key="key">value</entry>
+    <entry key="key2">value2</entry>
+    <!-- <entry ..>...</entry> -->
+  </config>
+  <enabled>$boolean</enabled>
+  <integration>$integration</integration>
+  <project>$project</project>
+  <type>$type</type>
+</scmProjectPluginConfig>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "config": {
+    "key": "$string",
+    "key2": "$string"
+  },
+  "enabled": $boolean,
+  "integration": "$integration",
+  "project": "$project",
+  "type": "$type"
+}
+~~~~~~~~~~
+
+### Get Project SCM Action Input Fields
+
+Get the input fields and selectable items for a specific action.  
+
+Each action may have a set of Input Fields describing user-input values.
+
+Export actions may have a set of `scmExportActionItem`s which describe Job changes that can be
+included in the action.
+
+Import actions may have a set of `scmImportActionItem`s which describe paths from the import repo
+which can be selected for the action, they will also be associated with a Job after they are matched.
+
+**Request**
+
+    GET /api/15/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input
+
+**Response**
+
+`Content-Type: application/xml`:
+
+The content of `<scmPluginInputField>` is the same as shown in [Get SCM Plugin Input Fields](#get-scm-plugin-input-fields).
+
+`scmExportActionItem` values:
+
+* `itemId` - ID of the repo item, e.g. a file path
+* `job` - job information
+    * `groupPath` group path, or empty/null
+    * `jobId` job ID
+    * `jobName` job name
+* `deleted` - boolean, whether the job was deleted and requires deleting the associated repo item
+* `renamed` - boolean if the job was renamed
+* `originalId` - ID of a repo item if the job was renamed and now is stored at a different repo path, or empty/null
+
+`scmImportActionItem` values:
+
+* `itemId` - ID of the repo item, e.g. a file path
+* `job` - job information, may be empty/null
+    * `groupPath` group path, or empty
+    * `jobId` job ID
+    * `jobName` job name
+* `tracked` - boolean, true if there is an associated `job`
+
+
+
+~~~~~~~~~~ {.xml}
+<scmActionInput>
+  <actionId>$actionId</actionId>
+  <description />
+  <fields>
+    <scmPluginInputField>...</scmPluginInputField>
+  </fields>
+  <integration>$integration</integration>
+  <title>$string</title>
+  <importItems>
+    <!-- import only -->
+    <scmImportActionItem>
+      <itemId>$string</itemId>
+      <job>
+        <!-- job tag may be empty if no associated job-->
+          <groupPath>$jobgroup</groupPath>
+          <jobId>$jobid</jobId>
+          <jobName>$jobname</jobName>
+      </job>
+      <tracked>$boolean</tracked>
+    </scmImportActionItem>
+  </importItems>
+  <exportItems>
+    <!-- export only -->
+    <scmExportActionItem>
+      <deleted>$boolean</deleted>
+      <itemId>$string</itemId>
+      <job>
+        <groupPath>$jobgroup</groupPath>
+        <jobId>$jobid</jobId>
+        <jobName>$jobname</jobName>
+      </job>
+      <originalId>$string</originalId>
+      <renamed>$boolean</renamed>
+    </scmExportActionItem>
+  </exportItems>
+</scmActionInput>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+The content of `"fields"` array is the same as shown in [Get SCM Plugin Input Fields](#get-scm-plugin-input-fields).
+
+~~~~~~~~~~ {.json}
+{
+  "actionId": "$actionId",
+  "description": "$string",
+  "fields": [
+    { "name": ...
+    }
+  ],
+  "integration": "$integration",
+  "title": "$string",
+  "importItems": [
+    {
+      "itemId": "$string",
+      "job": {
+        "groupPath": "$jobgroup",
+        "jobId": "$jobid",
+        "jobName": "$jobname"
+      },
+      "tracked": $boolean
+    }
+  ],
+  "exportItems": [
+    {
+      "deleted": $boolean,
+      "itemId": "$string",
+      "job": {
+        "groupPath": "$jobgroup",
+        "jobId": "$jobid",
+        "jobName": "$jobname"
+      },
+      "originalId": "$string",
+      "renamed": $boolean
+    }
+  ]
+}
+~~~~~~~~~~
+
+### Perform Project SCM Action
+
+Perform the action for the SCM integration plugin, with a set of input parameters,
+selected Jobs, or Items, or Items to delete.
+
+Depending on the [available Input Fields for the action](#get-project-scm-action-input-fields), the action will
+expect a set of `input` values.  
+
+The set of `jobs` and `items` to choose from will be included in the Input Fields response,
+however where an Item has an associated Job, you can supply either the Job ID, or the Item ID.
+
+When there are items to be deleted (`export` integration), you can specify the Item IDs in the `deleted`
+section.  However, if the item is associated with a renamed Job, including the Job ID will have the same effect.
+
+Note: including the Item ID of an associated job, instead of the Job ID,
+will not automatically delete a renamed item.
+
+
+**Request**
+
+    POST /api/15/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmAction>
+    <input>
+        <entry key="message">$commitMessage</entry>
+    </input>
+    <jobs>
+        <job jobId="$jobId"/>
+    </jobs>
+    <items>
+        <item itemId="$itemId"/>
+    </items>
+    <deleted></deleted>
+</scmAction>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+    "input":{
+        "message":"$commitMessage"
+    },
+    "jobs":[
+        "$jobId"
+    ],
+    "items":[
+        "$itemId"
+    ],
+    "deleted":null
+}
+~~~~~~~~~~
+
+**Response**
+
+Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-project).
+
+### Get Job SCM Status
+
+**Request**
+
+    GET /api/15/job/[ID]/scm/[INTEGRATION]/status
+
+**Response**
+
+Note: `import` status will not include any actions for the job, refer to the Project status to list import actions.
+
+Import plugin values for `$synchState`:
+
+* `CLEAN` - no changes
+* `UNKNOWN` - status unknown, e.g. the job was not imported via SCM
+* `REFRESH_NEEDED` - plugin needs to refresh
+* `IMPORT_NEEDED` - Job changes need to be imported
+* `DELETE_NEEDED` - Job need to be deleted
+
+Export plugin values for `$synchState`:
+
+* `CLEAN` - no changes
+* `REFRESH_NEEDED` - plugin needs to refresh
+* `EXPORT_NEEDED` - job changes need to be exported
+* `CREATE_NEEDED` - Job needs to be added to the repo
+
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmJobStatus>
+  <actions>
+    <string>$action</string>
+    <!--
+    <string>$action2</string>
+    -->
+  </actions>
+  <commit>
+    <author>$commitAuthor</author>
+    <commitId>$commitId</commitId>
+    <date>$commitDate</date>
+    <info>
+      <entry key="key">value</entry>
+      <!-- <entry key="..">...</entry> -->
+    </info>
+    <message>$commitMessage</message>
+  </commit>
+  <id>$jobId</id>
+  <integration>$integration</integration>
+  <message>$statusMessage</message>
+  <project>$project</project>
+  <synchState>$synchState</synchState>
+</scmJobStatus>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "actions": [
+    "$action"
+  ],
+  "commit": {
+    "author": "$commitAuthor",
+    "commitId": "$commitId",
+    "date": "$commitDate",
+    "info": {
+      "key": "value.."
+    },
+    "message": "$commitMessage"
+  },
+  "id": "$jobId",
+  "integration": "$integration",
+  "message": "$statusMessage",
+  "project": "$project",
+  "synchState": "$synchState"
+}
+~~~~~~~~~~
+
+### Get Job SCM Diff
+
+Retrieve the file diff for the Job, if there are changes for the integration.
+
+The format of the diff content depends on the specific plugin. For the Git plugins,
+a unified diff format is used.
+
+**Request**
+
+    GET /api/15/job/[ID]/scm/[INTEGRATION]/diff
+
+**Response**
+
+The `commit` info will be the same structure as in [Get Job SCM Status](#get-job-scm-status).
+
+For `import` only, `incomingCommit` will indicate the to-be-imported change.
+
+For `application/xml`, the `diffContent` will use a CDATA section to preserve whitespace.
+
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmJobDiff>
+  <commit>
+    <!-- commit info -->
+  </commit>
+  <diffContent><![CDATA[...]]></diffContent>
+  <id>$jobId</id>
+  <incomingCommit>
+    <!-- import only: incoming commit info -->
+  </incomingCommit>
+  <integration>$integration</integration>
+  <project>$project</project>
+</scmJobDiff>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+  "commit": {
+    ...
+  },
+  "diffContent": "...",
+  "id": "$jobId",
+  "incomingCommit": {
+    ...
+  },
+  "integration": "$integration",
+  "project": "$project"
+}
+~~~~~~~~~~
+
+### Get Job SCM Action Input Fields
+
+Get the input fields and selectable items for a specific action for a job.  
+
+Each action may have a set of Input Fields describing user-input values.
+
+Export actions will include one `scmExportActionItem` for the Job.
+
+Import actions may have a set of `scmImportActionItem` for the job.
+
+**Request**
+
+    GET /api/15/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input
+
+**Response**
+
+The same response format as in [Get Project SCM Action Input Fields](#get-project-scm-action-input-fields).
+
+### Perform Job SCM Action
+
+**Request**
+
+    POST /api/15/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]
+
+Request Content is nearly exactly as expected in [Perform Project SCM Action](#perform-project-scm-action),
+however the `jobIds` do not need to be specified, as the `ID` of the job is already specified.
+The `items` and `deleted` sections are not used.
+
+Only the `input` values need to be specified:
+
+`Content-Type: application/xml`:
+
+~~~~~~~~~~ {.xml}
+<scmAction>
+    <input>
+        <entry key="message">$commitMessage</entry>
+    </input>
+</scmAction>
+~~~~~~~~~~
+
+`Content-Type: application/json`:
+
+~~~~~~~~~~ {.json}
+{
+    "input":{
+        "message":"$commitMessage"
+    }
+}
+~~~~~~~~~~
+
+**Response**
+
+
+Same response as [Setup SCM Plugin for a Project](#setup-scm-plugin-for-a-project).
+
 
 ## Index
 
@@ -4012,13 +5328,58 @@ If request was JSON, then the following JSON:
 * `GET` [Getting Executions for a Job](#getting-executions-for-a-job)
 * `DELETE` [Delete all Executions for a Job](#delete-all-executions-for-a-job)
 
+
+[/api/V/job/[ID]/execution/enable][]
+
+* `POST` [Enable Executions for a Job](#enable-executions-for-a-job)
+
+[/api/V/job/[ID]/execution/disable][]
+
+* `POST` [Disable Executions for a Job](#disable-executions-for-a-job)
+
 [/api/V/job/[ID]/run][]
 
 * `POST` [Running a Job](#running-a-job)
 
+[/api/V/job/[ID]/schedule/enable][]
+
+* `POST` [Enable Scheduling for a Job](#enable-scheduling-for-a-job)
+
+[/api/V/job/[ID]/schedule/disable][]
+
+* `POST` [Disable Scheduling for a Job](#disable-scheduling-for-a-job)
+    
+[/api/V/job/[ID]/scm/[INTEGRATION]/status][] 
+
+- `GET` [Get SCM status for a Job][/api/V/job/[ID]/scm/[INTEGRATION]/status]
+
+[/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]][] 
+
+- `POST` [Perform SCM action for a Job.][/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]]
+
+[/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input][] 
+
+- `GET` [Get Job SCM Action Input Fields.][/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input]
+
 [/api/V/jobs/delete][]
 
 * `DELETE` [Bulk Job Delete](#bulk-job-delete)
+
+[/api/V/jobs/execution/enable][]
+
+* `POST` [Bulk Toggle Job Execution](#bulk-toggle-job-execution)
+
+[/api/V/jobs/execution/disable][]
+
+* `POST` [Bulk Toggle Job Execution](#bulk-toggle-job-execution)
+
+[/api/V/jobs/schedule/enable][]
+
+* `POST` [Bulk Toggle Job Schedules](#bulk-toggle-job-schedules)
+
+[/api/V/jobs/schedule/disable][]
+
+* `POST` [Bulk Toggle Job Schedules](#bulk-toggle-job-schedules)
 
 [/api/V/project/[PROJECT]][]
 
@@ -4107,6 +5468,42 @@ If request was JSON, then the following JSON:
 
 * `POST` [Running Adhoc Script URLs](#running-adhoc-script-urls)
 
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugins][]
+
+* `GET` [List SCM plugins for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugins]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input][]
+
+* `GET` [Get SCM plugin setup input fields.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup][]
+
+* `POST` [Setup SCM for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable][]
+
+* `POST` [Enable SCM for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable][]
+
+* `POST` [Disable SCM for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/status][]
+
+* `GET` [Get SCM status for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/status]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/config][]
+
+* `GET` [Get SCM config for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/config]]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]][]
+
+* `POST` [Perform SCM action for a project.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]]
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input][]
+
+* `GET` [Get Project SCM Action Input Fields.][/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input]
+
 [/api/V/projects][]
 
 * `GET` [Listing Projects](#listing-projects)
@@ -4115,6 +5512,14 @@ If request was JSON, then the following JSON:
 [/api/V/scheduler/takeover][]
 
 * `PUT` [Takeover Schedule in Cluster Mode](#takeover-schedule-in-cluster-mode)
+
+[/api/V/scheduler/jobs][]
+
+* `GET` [List Scheduled Jobs For this Cluster Server][/api/V/scheduler/jobs]
+
+[/api/V/scheduler/server/[UUID]/jobs][]
+
+* `GET` [List Scheduled Jobs For a Cluster Server][/api/V/scheduler/server/[UUID]/jobs]
 
 [/api/V/storage/keys/[PATH]/[FILE]][]
 
@@ -4132,10 +5537,6 @@ If request was JSON, then the following JSON:
 * `PUT` [Update an ACL Policy](#update-an-acl-policy)
 * `DELETE` [Delete an ACL Policy](#delete-an-acl-policy)
 
-[/api/V/system/info][]
-
-* `GET` [System Info](#system-info)
-
 [/api/V/system/executions/enable][]
 
 * `POST` [Set Active Mode](#set-active-mode)
@@ -4143,6 +5544,22 @@ If request was JSON, then the following JSON:
 [/api/V/system/executions/disable][]
 
 * `POST` [Set Passive Mode](#set-passive-mode)
+
+[/api/V/system/info][]
+
+* `GET` [System Info](#system-info)
+
+[/api/V/system/logstorage][]
+
+* `GET` [Log Storage Info][/api/V/system/logstorage]
+
+[/api/V/system/logstorage/incomplete][]
+
+* `GET` [List Executions with Incomplete Log Storage][/api/V/system/logstorage/incomplete]
+
+[/api/V/system/logstorage/incomplete/resume][]
+
+* `POST` [Resume Incomplete Log Storage][/api/V/system/logstorage/incomplete/resume]
 
 [/api/V/tokens][]
 
@@ -4155,6 +5572,21 @@ If request was JSON, then the following JSON:
 
 * `GET` [Get a token](#get-a-token)
 * `DELETE` [Delete a token](#delete-a-token)
+
+
+
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugins]:#list-scm-plugins
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/input]:#get-scm-plugin-input-fields
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/setup]:#setup-scm-plugin-for-a-project
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/enable]:#enable-scm-plugin-for-a-project
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/plugin/[TYPE]/disable]:#disable-scm-plugin-for-a-project
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/status]:#get-project-scm-status
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/config]:#get-project-scm-config
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]]:#perform-project-scm-action
+[/api/V/project/[PROJECT]/scm/[INTEGRATION]/action/[ACTION_ID]/input]:#get-project-scm-action-input-fields
+[/api/V/job/[ID]/scm/[INTEGRATION]/status]:#get-job-scm-status
+[/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]]:#perform-job-scm-action
+[/api/V/job/[ID]/scm/[INTEGRATION]/action/[ACTION_ID]/input]:#get-job-scm-action-input-fields
 
 
 [/api/V/execution/[ID]]: #execution-info
@@ -4181,13 +5613,27 @@ If request was JSON, then the following JSON:
 [DELETE /api/V/job/[ID]]:#deleting-a-job-definition
 
 [/api/V/job/[ID]/executions]:#getting-executions-for-a-job
+
+[/api/V/job/[ID]/execution/enable]:#enable-executions-for-a-job
+
+[/api/V/job/[ID]/execution/disable]:#disable-executions-for-a-job
+
 [POST /api/V/job/[ID]/executions]:#running-a-job
 [DELETE /api/V/job/[ID]/executions]:#delete-all-executions-for-a-job
+
+
+[/api/V/job/[ID]/schedule/enable]:#enable-scheduling-for-a-job
+
+[/api/V/job/[ID]/schedule/disable]:#disable-scheduling-for-a-job
 
 
 [/api/V/job/[ID]/run]:#running-a-job
 
 [/api/V/jobs/delete]:#bulk-job-delete
+[/api/V/jobs/execution/enable]:#bulk-toggle-job-execution
+[/api/V/jobs/execution/disable]:#bulk-toggle-job-execution
+[/api/V/jobs/schedule/enable]:#bulk-toggle-job-schedules
+[/api/V/jobs/schedule/disable]:#bulk-toggle-job-schedules
 
 [/api/V/project/[PROJECT]]:#getting-project-info
 [DELETE /api/V/project/[PROJECT]]:#project-deletion
@@ -4234,6 +5680,7 @@ If request was JSON, then the following JSON:
 [/api/V/project/[PROJECT]/resources/refresh]:#refreshing-resources-for-a-project
 
 [/api/V/projects]:#listing-projects
+
 [POST /api/V/projects]:#project-creation
 
 [/api/V/project/[PROJECT]/run/command]:#running-adhoc-commands
@@ -4243,6 +5690,11 @@ If request was JSON, then the following JSON:
 [/api/V/project/[PROJECT]/run/url]:#running-adhoc-script-urls
 
 [/api/V/scheduler/takeover]:#takeover-schedule-in-cluster-mode
+
+[/api/V/scheduler/jobs]:#list-scheduled-jobs-for-this-cluster-server
+
+[/api/V/scheduler/server/[UUID]/jobs]:#list-scheduled-jobs-for-a-cluster-server
+
 [/api/V/storage/keys/[PATH]/[FILE]]:#list-keys
 [PUT /api/V/storage/keys/[PATH]/[FILE]]:#upload-keys
 [DELETE /api/V/storage/keys/[PATH]/[FILE]]:#delete-keys
@@ -4252,6 +5704,11 @@ If request was JSON, then the following JSON:
 [/api/V/system/info]:#system-info
 [/api/V/system/executions/enable]:#set-active-mode
 [/api/V/system/executions/disable]:#set-passive-mode
+
+[/api/V/system/logstorage]:#log-storage-info
+[/api/V/system/logstorage/incomplete]:#list-executions-with-incomplete-log-storage
+[/api/V/system/logstorage/incomplete/resume]:#resume-incomplete-log-storage
+[POST /api/V/system/logstorage/incomplete/resume]:#resume-incomplete-log-storage
 
 [/api/V/tokens]:#list-tokens
 [/api/V/tokens/[USER]]:#list-tokens

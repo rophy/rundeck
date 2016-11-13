@@ -5,7 +5,7 @@
   Time: 3:29 PM
 --%>
 
-<%@ page contentType="text/html;charset=UTF-8" %></page>
+<%@ page import="com.dtolabs.rundeck.core.plugins.configuration.PropertyScope" contentType="text/html;charset=UTF-8" %></page>
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
@@ -34,6 +34,9 @@
             <div class="panel panel-primary" id="createform">
                 <div class="panel-heading">
                     <span class="h3">
+                        <g:if test="${pluginDescription && pluginDescription.description?.title}">
+                            ${pluginDescription.description.title}:
+                        </g:if>
                         <g:if test="${actionView && actionView.title}">
                             ${actionView.title}
                         </g:if>
@@ -221,7 +224,7 @@
                                             <label title="${trackedItem.id}">
                                                 <g:checkBox name="chosenTrackedItem"
                                                             value="${trackedItem.id}"
-                                                            checked="${selectedItems?.contains(trackedItem.id)||trackedItem.selected}"/>
+                                                            checked="${selectedItems?.contains(trackedItem.id)||trackedItem.selected||(trackedItem.jobId && selected?.contains(trackedItem.jobId))}"/>
 
                                                 <g:if test="${job}">
 
@@ -299,20 +302,16 @@
                         </g:if>
                     </g:elseif>
                     <div class="list-group-item">
-                        <g:each in="${actionView?.properties}" var="prop">
-
-                            <g:if test="${!prop.scope || prop.scope.isProjectLevel() || prop.scope.isUnspecified()}">
-                                <g:render
-                                        template="/framework/pluginConfigPropertyFormField"
-                                        model="${[prop         : prop,
-                                                  prefix       : 'test',
-                                                  error        : report?.errors ? report.errors[prop.name] : null,
-                                                  values       : config,
-                                                  fieldname    : 'pluginProperties.' + prop.name,
-                                                  origfieldname: 'orig.' + prop.name
-                                        ]}"/>
-                            </g:if>
-                        </g:each>
+                        <g:if test="${actionView?.properties}">
+                            <g:render template="/framework/pluginConfigPropertiesInputs" model="${[
+                                    properties:actionView?.properties,
+                                    report:report,
+                                    values:config,
+                                    fieldnamePrefix:'pluginProperties.',
+                                    origfieldnamePrefix:'orig.' ,
+                                    allowedScope: PropertyScope.Project
+                            ]}"/>
+                        </g:if>
                     </div>
                 </div>
 

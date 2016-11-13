@@ -22,13 +22,23 @@ import com.dtolabs.rundeck.core.plugins.configuration.Property
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.plugins.configuration.Validator
 import com.dtolabs.rundeck.server.authorization.AuthConstants
+import com.dtolabs.rundeck.server.plugins.PluginCustomizer
 import com.dtolabs.rundeck.server.plugins.loader.ApplicationContextPluginFileSource
 import com.dtolabs.rundeck.server.plugins.loader.PluginFileManifest
 import com.dtolabs.rundeck.server.plugins.loader.PluginFileSource
 import com.dtolabs.utils.Streams
+import grails.spring.BeanBuilder
 import org.codehaus.groovy.grails.commons.GrailsApplication
+import org.springframework.beans.factory.NoSuchBeanDefinitionException
+import org.springframework.beans.factory.config.AutowireCapableBeanFactory
+import org.springframework.beans.factory.groovy.GroovyBeanDefinitionReader
+import org.springframework.beans.factory.support.BeanDefinitionBuilder
+import org.springframework.beans.factory.support.BeanDefinitionRegistry
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware
+import org.springframework.scripting.config.LangNamespaceUtils
+import org.springframework.scripting.groovy.GroovyScriptFactory
+import org.springframework.scripting.support.ScriptFactoryPostProcessor
 import rundeck.Execution
 import rundeck.PluginStep
 import rundeck.ScheduledExecution
@@ -51,6 +61,7 @@ class FrameworkService implements ApplicationContextAware {
     def ExecutionService executionService
     def metricService
     def Framework rundeckFramework
+    def rundeckPluginRegistry
 
     def getRundeckBase(){
         return rundeckFramework.baseDir.absolutePath;
@@ -86,7 +97,40 @@ class FrameworkService implements ApplicationContextAware {
                 log.error("Failed extracting bundled plugin ${pluginmf}", e)
                 result.logs << "Failed extracting bundled plugin ${pluginmf}: ${e}"
             }
+            if(pluginmf.fileName.endsWith(".groovy")){
+                //initialize groovy plugin as spring bean if it does not exist
+                def bean=loadGroovyScriptPluginBean(grailsApplication,new File(pluginsDir, pluginmf.fileName))
+                result.logs << "Loaded groovy plugin ${pluginmf.fileName} as ${bean.class} ${bean}"
+
+            }
         }
+        return result
+    }
+    def loadGroovyScriptPluginBean(GrailsApplication grailsApplication,File file){
+        String beanName = file.name.replace('.groovy', '')
+        def testBean
+        try {
+            testBean = grailsApplication.mainContext.getBean(beanName)
+            log.debug("Groovy plugin bean already exists in main context: $beanName: $testBean")
+        } catch (NoSuchBeanDefinitionException e) {
+            log.debug("Bean not found: $beanName")
+        }
+        if (testBean) {
+            return testBean
+        }
+
+        def builder=new BeanBuilder(grailsApplication.mainContext)
+        builder.beans {
+            xmlns lang: 'http://www.springframework.org/schema/lang'
+            lang.groovy(id: beanName, 'script-source': file.toURI().toString(), 'customizer-ref': 'pluginCustomizer')
+        }
+
+        def context = builder.createApplicationContext()
+        def result= context.getBean(beanName)
+
+        log.debug("Loaded groovy plugin bean; type: ${result.class} ${result}")
+        rundeckPluginRegistry.registerDynamicPluginBean(beanName,context)
+
         return result
     }
 
@@ -138,7 +182,7 @@ class FrameworkService implements ApplicationContextAware {
      * Return a list of FrameworkProject objects
      */
     def projectNames () {
-        rundeckFramework.frameworkProjectMgr.listFrameworkProjects()*.name
+        rundeckFramework.frameworkProjectMgr.listFrameworkProjectNames()
     }
     def projects (AuthContext authContext) {
         //authorize the list of projects
@@ -150,6 +194,15 @@ class FrameworkService implements ApplicationContextAware {
         }
         def authed = authorizeApplicationResourceSet(authContext, resources, 'read')
         return new ArrayList(authed.collect{projMap[it.name]})
+    }
+    def projectNames (AuthContext authContext) {
+        //authorize the list of projects
+        def resources=[] as Set
+        for (projName in rundeckFramework.frameworkProjectMgr.listFrameworkProjectNames()) {
+            resources << authResourceForProject(projName)
+        }
+        def authed = authorizeApplicationResourceSet(authContext, resources, 'read')
+        return new ArrayList(authed.collect{it.name}).sort()
     }
 
     def existsFrameworkProject(String project) {
@@ -171,10 +224,10 @@ class FrameworkService implements ApplicationContextAware {
         try {
             proj = rundeckFramework.getFrameworkProjectMgr().createFrameworkProjectStrict(project, properties)
         } catch (Error e) {
-            log.error(e.message)
+            log.error(e.message,e)
             errors << e.getMessage()
         } catch (RuntimeException e) {
-            log.error(e.message)
+            log.error(e.message,e)
             errors << e.getMessage()
         }
         [proj,errors]
@@ -190,8 +243,7 @@ class FrameworkService implements ApplicationContextAware {
         try {
             getFrameworkProject(project).mergeProjectProperties(properties, removePrefixes)
         } catch (Error e) {
-            log.error(e.message)
-            log.debug(e.message,e)
+            log.error(e.message,e)
             return [success: false, error: e.message]
         }
         [success:true]
@@ -234,20 +286,15 @@ class FrameworkService implements ApplicationContextAware {
      * @param framework
      * @return [readme: "readme content", readmeHTML: "rendered content", motd: "motd content", motdHTML: "readnered content"]
      */
-    def getFrameworkProjectReadmeContents(String project){
-        def project1 = getFrameworkProject(project)
+    def getFrameworkProjectReadmeContents(IRundeckProject project1){
         def result = [:]
-        if(project1.existsFileResource("readme.md")){
-            def baos=new ByteArrayOutputStream()
-            def len=project1.loadFileResource("readme.md",baos)
-            result.readme = baos.toString()
-            result.readmeHTML = result.readme?.decodeMarkdown()
+        if(project1.info?.readme){
+            result.readme = project1.info?.readme
+            result.readmeHTML = project1.info?.readmeHTML?:result.readme?.decodeMarkdown()
         }
-        if(project1.existsFileResource("motd.md")){
-            def baos=new ByteArrayOutputStream()
-            def len=project1.loadFileResource("motd.md",baos)
-            result.motd = baos.toString()
-            result.motdHTML = result.motd?.decodeMarkdown()
+        if(project1.info?.motd){
+            result.motd = project1.info?.motd
+            result.motdHTML = project1.info?.motdHTML?:result.motd?.decodeMarkdown()
         }
 
         return result
@@ -262,6 +309,18 @@ class FrameworkService implements ApplicationContextAware {
         return PropertyResolverFactory.createResolver(
                 instanceConfiguration ? PropertyResolverFactory.instanceRetriever(instanceConfiguration) : null,
                 null != projectName ? PropertyResolverFactory.instanceRetriever(getFrameworkProject(projectName).getProperties()) : null,
+                rundeckFramework.getPropertyRetriever()
+        )
+    }
+    /**
+     * Get a property resolver for optional project level
+     * @param projectName
+     * @return
+     */
+    def getFrameworkPropertyResolverWithProps(Map projectProperties=null, Map instanceConfiguration=null) {
+        return PropertyResolverFactory.createResolver(
+                instanceConfiguration ? PropertyResolverFactory.instanceRetriever(instanceConfiguration) : null,
+                null != projectProperties ? PropertyResolverFactory.instanceRetriever(projectProperties) : null,
                 rundeckFramework.getPropertyRetriever()
         )
     }
@@ -963,6 +1022,7 @@ class FrameworkService implements ApplicationContextAware {
                 properties = Validator.demapProperties(props, desc)
             } catch (ExecutionServiceException e) {
                 log.error(e.message)
+                log.debug(e.message,e)
             }
         }
         properties

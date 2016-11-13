@@ -159,10 +159,28 @@ class ScheduledExecutionControllerTests  {
         def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
         assertEquals 'server1', controller.expandUrl(option, '${job.rundeck.nodename}', se)
     }
+    public void testExpandUrlJobRundeckNodename2() {
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        assertEquals 'server1', controller.expandUrl(option, '${rundeck.nodename}', se)
+    }
 
     public void testExpandUrlJobRundeckServerUUID() {
         def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
         assertEquals 'xyz', controller.expandUrl(option, '${job.rundeck.serverUUID}', se)
+    }
+
+    public void testExpandUrlJobRundeckServerUUID2() {
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        assertEquals 'xyz', controller.expandUrl(option, '${rundeck.serverUUID}', se)
+    }
+    public void testExpandUrlJobRundeckBasedir() {
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        assertEquals '/a/path', controller.expandUrl(option, '${job.rundeck.basedir}', se,[:],false)
+    }
+
+    public void testExpandUrlJobRundeckBasedir2() {
+        def (Option option, ScheduledExecution se) = setupExpandUrlJob(controller)
+        assertEquals '/a/path', controller.expandUrl(option, '${rundeck.basedir}', se,[:],false)
     }
 
     protected List setupExpandUrlJob(def controller) {
@@ -174,11 +192,14 @@ class ScheduledExecutionControllerTests  {
         se.save()
         assertNotNull(option.properties)
         controller.frameworkService = mockWith(FrameworkService) {
-            getFrameworkNodeName(1..1) {->
+            getFrameworkNodeName() {->
                 'server1'
             }
-            getServerUUID(1..12) {->
+            getServerUUID(1..1) {->
                 'xyz'
+            }
+            getRundeckBase(1..2){->
+                '/a/path'
             }
         }
         [option, se]
@@ -211,6 +232,7 @@ class ScheduledExecutionControllerTests  {
                 [success: true, scheduledExecution: se]
             }
             seServiceControl.demand.logJobChange {changeinfo, properties ->}
+            seServiceControl.demand.issueJobChangeEvent {event->}
             sec.scheduledExecutionService = seServiceControl.createMock()
 
 			def oServiceControl = mockFor(OrchestratorPluginService, true)
@@ -374,6 +396,7 @@ class ScheduledExecutionControllerTests  {
                 [success: true, scheduledExecution: se]
             }
             seServiceControl.demand.logJobChange {changeinfo, properties ->}
+            seServiceControl.demand.issueJobChangeEvent {evt->}
             sec.scheduledExecutionService = seServiceControl.createMock()
 
 
@@ -504,6 +527,7 @@ class ScheduledExecutionControllerTests  {
                 [success: true, scheduledExecution: se]
             }
             seServiceControl.demand.logJobChange {changeinfo, properties ->}
+        seServiceControl.demand.issueJobChangeEvent {evt->}
             sec.scheduledExecutionService = seServiceControl.createMock()
 
 
@@ -568,6 +592,7 @@ class ScheduledExecutionControllerTests  {
                 [success: false]
             }
             seServiceControl.demand.logJobChange {changeinfo, properties ->}
+        seServiceControl.demand.issueJobChangeEvent {event->}
             sec.scheduledExecutionService = seServiceControl.createMock()
             def nServiceControl = mockFor(NotificationService, true)
             nServiceControl.demand.listNotificationPlugins { []}
@@ -630,6 +655,7 @@ class ScheduledExecutionControllerTests  {
                 [success: false,unauthorized:true,error:'unauthorizedMessage']
             }
             seServiceControl.demand.logJobChange {changeinfo, properties ->}
+            seServiceControl.demand.issueJobChangeEvent {event->}
             sec.scheduledExecutionService = seServiceControl.createMock()
 
             def nServiceControl = mockFor(NotificationService, true)
@@ -743,6 +769,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             authResourceForProject{p->null}
             authorizeApplicationResourceAny(2..2){AuthContext authContext, Map resource, List actions->false}
             projects { return [] }
@@ -2260,6 +2287,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             authResourceForProject{p->null}
             authorizeApplicationResourceAny(2..2){AuthContext authContext, Map resource, List actions->false}
             projects { return [] }
@@ -2349,6 +2377,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             filterNodeSet{NodesSelector selector, String project->
                 null
             }
@@ -2445,6 +2474,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             filterNodeSet{NodesSelector selector, String project->
                 null
             }
@@ -2541,6 +2571,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             filterNodeSet{NodesSelector selector, String project->
                 null
             }
@@ -2636,6 +2667,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             filterNodeSet{NodesSelector selector, String project->
                 null
             }
@@ -2751,6 +2783,7 @@ class ScheduledExecutionControllerTests  {
             authorizeProjectJobAll { AuthContext authContext, ScheduledExecution job, Collection actions, String project ->
                 return true
             }
+            isClusterModeEnabled{-> false }
             filterNodeSet(1){NodesSelector selector, String project->
                 selector.acceptNode(new NodeEntryImpl("nodeb"))?testNodeSet:testNodeSetB
             }
@@ -2856,6 +2889,7 @@ class ScheduledExecutionControllerTests  {
                     skipjobs: []
             ]
         }
+        mock2.demand.issueJobChangeEvents {event->}
         sec.scheduledExecutionService = mock2.createMock()
 
         def xml = '''
@@ -3020,6 +3054,7 @@ class ScheduledExecutionControllerTests  {
                     skipjobs: []
             ]
         }
+        mock2.demand.issueJobChangeEvents {event->}
         sec.scheduledExecutionService = mock2.createMock()
 
         def xml = '''
@@ -3103,6 +3138,7 @@ class ScheduledExecutionControllerTests  {
                     skipjobs: []
             ]
         }
+        mock2.demand.issueJobChangeEvents {event->}
         sec.scheduledExecutionService = mock2.createMock()
 
         def xml = '''
@@ -3197,6 +3233,7 @@ class ScheduledExecutionControllerTests  {
                     skipjobs: []
             ]
         }
+        mock2.demand.issueJobChangeEvents {event->}
         sec.scheduledExecutionService = mock2.createMock()
         def xml = '''
 -
@@ -3292,6 +3329,7 @@ class ScheduledExecutionControllerTests  {
                     skipjobs: []
             ]
         }
+        mock2.demand.issueJobChangeEvents {event->}
         sec.scheduledExecutionService = mock2.createMock()
 
         def xml = '''

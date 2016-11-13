@@ -50,7 +50,7 @@ class BaseGitPlugin {
 
     BaseGitPlugin(Common commonConfig) {
         this.input = commonConfig.rawInput
-        this.commonConfig=commonConfig
+        this.commonConfig = commonConfig
     }
 
     Map<String, String> getSshConfig() {
@@ -63,7 +63,7 @@ class BaseGitPlugin {
     }
 
     def serialize(final JobExportReference job, format, File outfile = null) {
-        if(!outfile){
+        if (!outfile) {
             outfile = mapper.fileForJob(job)
         }
         if (!outfile.parentFile.isDirectory()) {
@@ -73,9 +73,22 @@ class BaseGitPlugin {
                 )
             }
         }
-        File temp = new File(outfile.getAbsolutePath() + ".tmp")
-        temp.withOutputStream { out ->
-            job.jobSerializer.serialize(format, out)
+        File temp = new File(outfile.parentFile, outfile.name + ".tmp")
+        try {
+            temp.withOutputStream { out ->
+                job.jobSerializer.serialize(format, out)
+            }
+        }catch(IOException e){
+            throw new ScmPluginException(
+                    "Failed to serialize job ${job}: ${e.message}",
+                    e
+            )
+
+        }
+        if (!temp.exists() || temp.size() < 1) {
+            throw new ScmPluginException(
+                    "Failed to serialize job, no content was written for job ${job}"
+            )
         }
         Files.move(temp.toPath(), outfile.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
@@ -160,25 +173,27 @@ class BaseGitPlugin {
 
             def result = new ScmExportResultImpl()
             result.success = pullResult.successful
-            result.message = result.success?"Rebase was successful":"Rebase did not succeed"
-            if(pullResult.rebaseResult){
-                result.extendedMessage = "Rebase result was: "+pullResult.rebaseResult.status?.toString()
+            result.message = result.success ? "Rebase was successful" : "Rebase did not succeed"
+            if (pullResult.rebaseResult) {
+                result.extendedMessage = "Rebase result was: " + pullResult.rebaseResult.status?.toString()
                 //get status
-                boolean rebasestat=false
-                if(pullResult.rebaseResult.conflicts) {
+                boolean rebasestat = false
+                if (pullResult.rebaseResult.conflicts) {
                     rebasestat = true
 
                     result.extendedMessage = result.extendedMessage + " Conflicts: " + pullResult.rebaseResult.conflicts
                 }
-                if(pullResult.rebaseResult.failingPaths){
+                if (pullResult.rebaseResult.failingPaths) {
                     rebasestat = true
-                    result.extendedMessage = result.extendedMessage+" Failures: "+pullResult.rebaseResult.failingPaths
+                    result.extendedMessage = result.extendedMessage + " Failures: " +
+                            pullResult.rebaseResult.failingPaths
                 }
-                if(pullResult.rebaseResult.uncommittedChanges){
+                if (pullResult.rebaseResult.uncommittedChanges) {
                     rebasestat = true
-                    result.extendedMessage = result.extendedMessage+" Uncommitted changes: "+pullResult.rebaseResult.uncommittedChanges
+                    result.extendedMessage = result.extendedMessage + " Uncommitted changes: " +
+                            pullResult.rebaseResult.uncommittedChanges
                 }
-                if(!rebasestat) {
+                if (!rebasestat) {
                     //rebase does not seem to actually include conflict info in result
                     def status = git.status().call()
                     if (status.conflicting || status.conflictingStageState) {
@@ -186,7 +201,7 @@ class BaseGitPlugin {
                     }
                 }
             }
-            if(!result.success) {
+            if (!result.success) {
                 //abort rebase
                 def abortResult = git.rebase().setOperation(RebaseCommand.Operation.ABORT).call()
                 if (abortResult.status == RebaseResult.Status.ABORTED) {
@@ -215,7 +230,7 @@ class BaseGitPlugin {
 
             def result = new ScmExportResultImpl()
             result.success = mergeresult.mergeStatus.successful
-            result.message = result.success?"Merge was successful":"Merge failed"
+            result.message = result.success ? "Merge was successful" : "Merge failed"
             result.extendedMessage = mergeresult.toString()
             return result
 
@@ -297,6 +312,7 @@ class BaseGitPlugin {
     static String expand(final String source, final ScmUserInfo scmUserInfo) {
         def userInfoProps = ['fullName', 'firstName', 'lastName', 'email', 'userName']
         def map = userInfoProps.collectEntries { [it, scmUserInfo[it]] }
+        map['login'] = map['userName']
         expand(source, map, 'user')
     }
 
@@ -309,20 +325,21 @@ class BaseGitPlugin {
         }
     }
 
-    JobState createJobStatus(final Map map,final List<Action> actions=[]) {
+    JobState createJobStatus(final Map map, final List<Action> actions = []) {
         //TODO: include scm status
         return new JobGitState(
                 synchState: map['synch'],
                 commit: map.commitMeta ? new GitScmCommit(map.commitMeta) : null,
-                actions:actions
+                actions: actions
         )
     }
 
-    JobImportState createJobImportStatus(final Map map) {
+    JobImportState createJobImportStatus(final Map map, final List<Action> actions = []) {
         //TODO: include scm status
         return new JobImportGitState(
                 synchState: map['synch'],
-                commit: map.commitMeta ? new GitScmCommit(map.commitMeta) : null
+                commit: map.commitMeta ? new GitScmCommit(map.commitMeta) : null,
+                actions: actions
         )
     }
 
@@ -385,32 +402,45 @@ class BaseGitPlugin {
             def config = agit.getRepository().getConfig()
             def found = config.getString("remote", REMOTE_NAME, "url")
             def projectName = config.getString("rundeck", "scm-plugin", "project-name")
-            if(projectName && !projectName.equals(context.frameworkProject)){
+            if (projectName && !projectName.equals(context.frameworkProject)) {
                 throw new ScmPluginInvalidInput(
                         "The base directory is already in use by another project: ${projectName}",
-                        Validator.errorReport('dir', "The base directory is already in use by another project: ${projectName}")
+                        Validator.errorReport(
+                                'dir',
+                                "The base directory is already in use by another project: ${projectName}"
+                        )
                 )
-            }else if(!projectName) {
+            } else if (!projectName) {
                 config.setString("rundeck", "scm-plugin", "project-name", context.frameworkProject)
                 config.save()
             }
-            if (found != url) {
+            def needsClone=false;
 
+            if (found != url) {
                 logger.debug("url differs, re-cloning")
+                needsClone = true
+            }else if (agit.repository.getFullBranch() != "refs/heads/$branch") {
+                //check same branch
+                logger.debug("branch differs, re-cloning")
+                needsClone = true
+            }
+
+            if(needsClone){
                 //need to reconfigured
                 removeWorkdir(base)
                 performClone(base, url, context)
-            } else {
-                try {
-                    fetchFromRemote(context, agit)
-                } catch (Exception e) {
-                    logger.debug("Failed fetch from the repository: ${e.message}", e)
-                    String msg = collectCauseMessages(e)
-                    throw new ScmPluginException("Failed fetch from the repository: ${msg}", e)
-                }
-                git = agit
-                repo = arepo
+                return
             }
+
+            try {
+                fetchFromRemote(context, agit)
+            } catch (Exception e) {
+                logger.debug("Failed fetch from the repository: ${e.message}", e)
+                String msg = collectCauseMessages(e)
+                throw new ScmPluginException("Failed fetch from the repository: ${msg}", e)
+            }
+            git = agit
+            repo = arepo
         } else {
             performClone(base, url, context)
         }
@@ -463,7 +493,7 @@ class BaseGitPlugin {
         if (!url) {
             url = command.repository.config.getString('remote', REMOTE_NAME, 'url')
         }
-        if(!url){
+        if (!url) {
             throw new NullPointerException("url for remote was not set")
         }
 
@@ -497,7 +527,7 @@ class BaseGitPlugin {
      * @param path
      * @return
      */
-    private String expandContextVarsInPath(ScmOperationContext context, String path) {
+    public static String expandContextVarsInPath(ScmOperationContext context, String path) {
         expand(expand(path, context.userInfo), [project: context.frameworkProject])
     }
 }
