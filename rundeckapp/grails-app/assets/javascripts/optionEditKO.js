@@ -1,7 +1,5 @@
-//= require knockout.min
-//= require knockout-mapping
 /*
- * Copyright 2014 SimplifyOps Inc, <http://simplifyops.com>
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +14,17 @@
  * limitations under the License.
  */
 
+//= require knockout.min
+//= require knockout-mapping
+
+
 function OptionEditor(data) {
     var self = this;
     self.name=ko.observable(data.name);
     self.bashVarPrefix= data.bashVarPrefix? data.bashVarPrefix:'';
     self.tobashvar = function (str) {
         return self.bashVarPrefix+"OPTION_" + str.toUpperCase().replace(/[^a-zA-Z0-9_]/g, '_').replace(/[{}$]/, '');
-    }
+    };
     self.bashVarPreview=ko.computed(function(){
        return self.tobashvar(self.name());
     });

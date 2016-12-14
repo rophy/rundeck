@@ -1,17 +1,17 @@
 /*
- * Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -24,12 +24,7 @@
 package com.dtolabs.rundeck.core.execution.workflow;
 
 import com.dtolabs.rundeck.core.common.*;
-import com.dtolabs.rundeck.core.execution.ExecutionContext;
-import com.dtolabs.rundeck.core.execution.ExecutionContextImpl;
-import com.dtolabs.rundeck.core.execution.ExecutionListenerOverride;
-import com.dtolabs.rundeck.core.execution.FailedNodesListener;
-import com.dtolabs.rundeck.core.execution.StatusResult;
-import com.dtolabs.rundeck.core.execution.StepExecutionItem;
+import com.dtolabs.rundeck.core.execution.*;
 import com.dtolabs.rundeck.core.execution.dispatch.Dispatchable;
 import com.dtolabs.rundeck.core.execution.dispatch.DispatcherResult;
 import com.dtolabs.rundeck.core.execution.service.NodeExecutorResult;
@@ -48,12 +43,10 @@ import junit.framework.TestSuite;
 import org.apache.tools.ant.BuildListener;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 
 /**
  * TestNodeFirstWorkflowStrategy is ...
@@ -100,7 +93,7 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
         junit.textui.TestRunner.run(suite());
     }
 
-    static class testWorkflowCmdItem implements NodeStepExecutionItem {
+    static class testWorkflowCmdItem extends BaseExecutionItem implements NodeStepExecutionItem {
         private String type;
         int flag = -1;
 
@@ -239,9 +232,9 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
             item.type = "my-type";
             commands.add(item);
             final WorkflowImpl workflow = new WorkflowImpl(commands, 1, false,
-                WorkflowStrategy.STEP_FIRST);
+                                                           WorkflowExecutor.STEP_FIRST);
             final WorkflowExecutionItemImpl executionItem = new WorkflowExecutionItemImpl(workflow);
-            final NodeFirstWorkflowStrategy strategy = new NodeFirstWorkflowStrategy(testFramework);
+            final NodeFirstWorkflowExecutor strategy = new NodeFirstWorkflowExecutor(testFramework);
             final StepExecutionContext context =
                 new ExecutionContextImpl.Builder()
                     .frameworkProject(TEST_PROJECT)
@@ -330,9 +323,9 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
             item.type = "my-type";
             commands.add(item);
             final WorkflowImpl workflow = new WorkflowImpl(commands, 1, false,
-                WorkflowStrategy.STEP_FIRST);
+                                                           WorkflowExecutor.STEP_FIRST);
             final WorkflowExecutionItemImpl executionItem = new WorkflowExecutionItemImpl(workflow);
-            final NodeFirstWorkflowStrategy strategy = new NodeFirstWorkflowStrategy(testFramework);
+            final NodeFirstWorkflowExecutor strategy = new NodeFirstWorkflowExecutor(testFramework);
             final StepExecutionContext context =
                 new ExecutionContextImpl.Builder()
                     .frameworkProject(TEST_PROJECT)
@@ -526,9 +519,9 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
         item.type = "my-type";
         commands.add(item);
         final WorkflowImpl workflow = new WorkflowImpl(commands, 1, false,
-            WorkflowStrategy.NODE_FIRST);
+                                                       WorkflowExecutor.NODE_FIRST);
         final WorkflowExecutionItemImpl executionItem = new WorkflowExecutionItemImpl(workflow);
-        final NodeFirstWorkflowStrategy strategy = new NodeFirstWorkflowStrategy(testFramework);
+        final NodeFirstWorkflowExecutor strategy = new NodeFirstWorkflowExecutor(testFramework);
         final NodeSet nodeset = new NodeSet();
         nodeset.createInclude().setName(".*");
         final ExecutionContextImpl.Builder builder = new ExecutionContextImpl.Builder();
@@ -568,7 +561,7 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
 
         assertNotNull(result);
         if (!result.isSuccess() && null != result.getException()) {
-            result.getException().printStackTrace(System.err);
+            result.getException().printStackTrace(System.out);
         }
         assertNull("threw exception: " + result.getException(), result.getException());
         assertTrue(result.isSuccess());
@@ -598,9 +591,9 @@ public class TestNodeFirstWorkflowStrategy extends AbstractBaseTest {
             item2.type = "my-type";
             commands.add(item2);
             final WorkflowImpl workflow = new WorkflowImpl(commands, 1, false,
-                WorkflowStrategy.STEP_FIRST);
+                                                           WorkflowExecutor.STEP_FIRST);
             final WorkflowExecutionItemImpl executionItem = new WorkflowExecutionItemImpl(workflow);
-            final NodeFirstWorkflowStrategy strategy = new NodeFirstWorkflowStrategy(testFramework);
+            final NodeFirstWorkflowExecutor strategy = new NodeFirstWorkflowExecutor(testFramework);
             final StepExecutionContext context =
                 new ExecutionContextImpl.Builder()
                     .frameworkProject(TEST_PROJECT)

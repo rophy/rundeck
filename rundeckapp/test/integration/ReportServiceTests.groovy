@@ -1,25 +1,24 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import com.dtolabs.rundeck.app.support.ExecQuery
 import rundeck.ExecReport
 import rundeck.BaseReport
 import rundeck.services.ReportService
 
-/*
-* Copyright 2012 DTO Labs, Inc. (http://dtolabs.com)
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*     http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-*/
- 
 /*
  * ReportServiceTests.java
  * 
@@ -70,6 +69,46 @@ class ReportServiceTests extends GroovyTestCase {
         assertQueryResult([reportIdFilter: 'blah3'], [r3])
         assertQueryResult([reportIdFilter: 'blah4'], [])
     }
+    void testgetExecNodeFilterReportIdFilter(){
+        def r1,r2,r3, r4
+
+        ExecReport.withNewSession {
+            r1=proto(reportId:'blah', jcExecId: '123', succeededNodeList:'test')
+            assert r1.validate()
+            assert null!=r1.save(flush: true)
+            assert 'blah'==r1.reportId
+            assertNotNull(r1.id)
+            r2 = proto(reportId: 'blah2', jcExecId: '124', failedNodeList:'test')
+            assert r2.validate()
+            assert null != r2.save(flush: true)
+            r3 = proto(reportId: 'blah3', jcExecId: '125', filterApplied:'tags: monkey')
+            assert r3.validate()
+            println r3.save(flush: true)
+            r4 = proto(reportId: 'blah4', jcExecId: '126', filterApplied:'.*',succeededNodeList:'test')
+            assert r4.validate()
+            println r4.save(flush: true)
+
+            sessionFactory.currentSession.flush()
+        }
+        r1=r1.refresh()
+        r2=r2.refresh()
+        r3=r3.refresh()
+        r4=r4.refresh()
+        assertEquals(4,ExecReport.count())
+        def query = new ExecQuery(execnodeFilter: 'name: test')
+
+        def result=reportService.getExecutionReports(query,true)
+        assert result.total==3
+        assert result.reports.size()==3
+        assert result.reports.contains(r1)
+
+        assertQueryResult([execnodeFilter: 'name: test'], [r1,r2,r4])
+        assertQueryResult([execnodeFilter: 'test'], [r1,r2,r4])
+        assertQueryResult([execnodeFilter: 'tags: monkey'], [r3])
+        assertQueryResult([execnodeFilter: 'tags: test'], [])
+        assertQueryResult([execnodeFilter: '.*'], [r4])
+    }
+
     void testgetExecReportsProjFilterIsExact(){
         def r1,r2,r3
 

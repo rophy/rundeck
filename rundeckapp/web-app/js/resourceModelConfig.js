@@ -1,11 +1,11 @@
 /*
- * Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,9 +18,13 @@ var ResourceModelConfigControl = Class.create({
     configCount: 0,  /* This element is used by passwordFieldsService to track when resources are deleted.  Do not reuse
      the configCount values after delete.  i.e. if you delete #2 and add a new resource, ensure that it is #3. */
     prefixKey: 'x',
-    initialize: function(pfix) {
+    didChange:function () { },
+    initialize: function(pfix,changeHandler) {
         if(pfix){
             this.prefixKey=pfix;
+        }
+        if(changeHandler){
+            this.didChange=changeHandler;
         }
     },
     addConfigChrome: function (elem, type, prefix, index, edit) {
@@ -76,6 +80,7 @@ var ResourceModelConfigControl = Class.create({
         Event.observe(cancelbutton, 'click', function(e) {
             Event.stop(e);
             self.cancelConfig(top);
+            self.didChange();
         });
         setText(cancelbutton,"Delete");
         cancelbutton.addClassName('btn-danger');
@@ -167,6 +172,7 @@ editConfig: function (elem, type, prefix, index) {
         parameters:params,
         onComplete:function(ajax) {
             if (ajax.request.success()) {
+                self.didChange();
                 self.addConfigChrome(elem, type, prefix, index);
             } else {
                 self.error(ajax);
@@ -203,6 +209,7 @@ addConfig: function(type) {
             parameters:{prefix:prefix,type:type},
             onComplete:function(ajax) {
                 if (ajax.request.success()) {
+                    self.didChange();
                     self.addConfigChrome(content, type, prefix, num + '');
                 } else {
                     self.error(ajax);

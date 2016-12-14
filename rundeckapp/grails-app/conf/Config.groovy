@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // locations to search for config files that get merged into the main config
 // config files can either be Java properties files or ConfigSlurper scripts
 
@@ -67,6 +83,20 @@ environments {
 grails.json.legacy.builder = false
 grails.mail.default.from="rundeck-server@localhost"
 
+grails.databinding.dateFormats = [
+        //default grails patterns
+        "yyyy-MM-dd HH:mm:ss.S",
+        "yyyy-MM-dd'T'hh:mm:ss'Z'",
+
+        // ISO8601 patterns
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+        "yyyy-MM-dd'T'HH:mm:ssXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+]
+
 // log4j configuration
 log4j={
     // Example of changing the log pattern for the default console
@@ -123,7 +153,8 @@ log4j={
 //            debug 'org.rundeck.web.infosec'
             debug 'org.apache.commons.httpclient'
             info 'grails.app.services.rundeck.services.ProjectManagerService'
-            off 'h2database'
+            //off 'h2database'
+            //info 'grails.app.utils.rundeck.codecs.SanitizedHTMLCodec'
         }
     }
 }
@@ -131,12 +162,16 @@ log4j={
 environments{
     development{
         feature.incubator.'*'=true
+        rundeck.feature.'*'.enabled=true
     }
     production{
         //disable feature toggling
         feature.incubator.feature = false
         //enable takeover schedule feature
         feature.incubator.jobs = true
+
+        //enable dynamic workflow step descriptions in GUI by default
+        rundeck.feature.workflowDynamicStepSummaryGUI.enabled = true
     }
 }
 
@@ -163,6 +198,8 @@ rundeck.security.authorization.containerPrincipal.enabled=true
 rundeck.security.authorization.container.enabled=true
 rundeck.security.authorization.preauthenticated.enabled=false
 rundeck.security.authorization.preauthenticated.attributeName=null
+rundeck.security.authorization.preauthenticated.userNameHeader=null
+rundeck.security.authorization.preauthenticated.userRolesHeader=null
 rundeck.security.authorization.preauthenticated.delimiter=','
 
 rundeck.web.metrics.servlets.metrics.enabled = true

@@ -1,17 +1,17 @@
 /*
- * Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -59,6 +59,7 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
     private int threadCount;
     private boolean keepgoing;
     private int loglevel;
+    private String charsetEncoding;
     private Map<String, Map<String, String>> dataContext;
     private Map<String, Map<String, String>> privateDataContext;
     private Map<String, Map<String, Map<String, String>>> nodeDataContext;
@@ -113,6 +114,15 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
         return flowControl;
     }
 
+    @Override
+    public String getCharsetEncoding() {
+        return charsetEncoding;
+    }
+
+    public void setCharsetEncoding(String charsetEncoding) {
+        this.charsetEncoding = charsetEncoding;
+    }
+
     public static class Builder {
         private ExecutionContextImpl ctx;
 
@@ -129,6 +139,7 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
                 ctx.nodeSet = original.getNodeSelector();
                 ctx.nodes = original.getNodes();
                 ctx.loglevel = original.getLoglevel();
+                ctx.charsetEncoding = original.getCharsetEncoding();
                 ctx.dataContext = original.getDataContext();
                 ctx.privateDataContext = original.getPrivateDataContext();
                 ctx.executionListener = original.getExecutionListener();
@@ -243,6 +254,11 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
 
         public Builder loglevel(int loglevel) {
             ctx.loglevel = loglevel;
+            return this;
+        }
+
+        public Builder charsetEncoding(String charsetEncoding) {
+            ctx.charsetEncoding = charsetEncoding;
             return this;
         }
 

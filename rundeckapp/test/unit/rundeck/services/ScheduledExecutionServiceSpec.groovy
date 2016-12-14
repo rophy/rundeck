@@ -1,11 +1,34 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.services
 
 import com.dtolabs.rundeck.core.authorization.UserAndRoles
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
+import com.dtolabs.rundeck.core.common.Framework
+import com.dtolabs.rundeck.core.execution.workflow.WorkflowExecutionItem
+import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategy
+import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategyService
+import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolver
 import grails.test.mixin.Mock
 import grails.test.mixin.TestFor
 import org.quartz.ListenerManager
 import org.quartz.Scheduler
+import org.quartz.core.QuartzScheduler
+import rundeck.Execution
 import rundeck.CommandExec
 import rundeck.JobExec
 import rundeck.Notification
@@ -23,7 +46,8 @@ import spock.lang.Unroll
  * Created by greg on 6/24/15.
  */
 @TestFor(ScheduledExecutionService)
-@Mock([Workflow, ScheduledExecution, CommandExec, Notification, Option,PluginStep,JobExec,WorkflowStep])
+@Mock([Workflow, ScheduledExecution, CommandExec, Notification, Option, PluginStep, JobExec,
+        WorkflowStep, Execution])
 class ScheduledExecutionServiceSpec extends Specification {
 
     public static final String TEST_UUID1 = 'BB27B7BB-4F13-44B7-B64B-D2435E2DD8C7'
@@ -35,6 +59,12 @@ class ScheduledExecutionServiceSpec extends Specification {
             existsFrameworkProject('testProject') >> true
             isClusterModeEnabled()>>enabled
             getServerUUID()>>TEST_UUID1
+            getFrameworkPropertyResolverWithProps(*_)>>Mock(PropertyResolver)
+        }
+        service.pluginService=Mock(PluginService)
+        service.executionServiceBean=Mock(ExecutionService)
+        service.executionUtilService=Mock(ExecutionUtilService){
+            createExecutionItemForWorkflow(_)>>Mock(WorkflowExecutionItem)
         }
         TEST_UUID1
     }
@@ -117,79 +147,6 @@ class ScheduledExecutionServiceSpec extends Specification {
         ] + overrides
     }
 
-    def "claim all scheduled jobs"() {
-        given:
-        def targetserverUUID = UUID.randomUUID().toString()
-        def serverUUID1 = UUID.randomUUID().toString()
-        def serverUUID2 = UUID.randomUUID().toString()
-        ScheduledExecution job1 = new ScheduledExecution(
-                createJobParams(jobName: 'blue1', project: 'AProject', serverNodeUUID: null)
-        ).save()
-        ScheduledExecution job2 = new ScheduledExecution(
-                createJobParams(jobName: 'blue2', project: 'AProject2', serverNodeUUID: serverUUID1)
-        ).save()
-        ScheduledExecution job3 = new ScheduledExecution(
-                createJobParams(jobName: 'blue3', project: 'AProject2', serverNodeUUID: serverUUID2)
-        ).save()
-        ScheduledExecution job3x = new ScheduledExecution(
-                createJobParams(jobName: 'blue3', project: 'AProject2', serverNodeUUID: targetserverUUID)
-        ).save()
-        ScheduledExecution job4 = new ScheduledExecution(
-                createJobParams(jobName: 'blue4', project: 'AProject2', scheduled: false)
-        ).save()
-        def jobs = [job1, job2, job3, job3x, job4]
-        when:
-        def resultMap = service.claimScheduledJobs(targetserverUUID, null, true)
-
-        ScheduledExecution.withSession { session ->
-            session.flush()
-            jobs*.refresh()
-        }
-        then:
-
-        [job1, job2, job3, job3x] == jobs.findAll { it.serverNodeUUID == targetserverUUID }
-        [job1, job2, job3]*.extid == resultMap.keySet() as List
-    }
-
-    def "claim all scheduled jobs in a project"(
-            String targetProject,
-            String targetServerUUID,
-            String serverUUID1,
-            List<Map> dataList,
-            List<String> resultList
-    )
-    {
-        setup:
-        def jobs = dataList.collect {
-            new ScheduledExecution(createJobParams(it)).save()
-        }
-
-        when:
-        def resultMap = service.claimScheduledJobs(targetServerUUID, null, true, targetProject)
-
-        ScheduledExecution.withSession { session ->
-            session.flush()
-            jobs*.refresh()
-        }
-        then:
-
-        resultList == resultMap.keySet() as List
-
-        where:
-        targetProject | targetServerUUID |
-                serverUUID1 |
-                dataList |
-                resultList
-        'AProject'    | TEST_UUID1       |
-                TEST_UUID2  |
-                [[uuid: 'job3', project: 'AProject', serverNodeUUID: TEST_UUID1], [uuid: 'job1', serverNodeUUID: TEST_UUID2], [project: 'AProject2', uuid: 'job2']] |
-                ['job1']
-        'AProject2'   | TEST_UUID1       |
-                TEST_UUID2  |
-                [[uuid: 'job3', project: 'AProject2', serverNodeUUID: TEST_UUID1], [uuid: 'job1', serverNodeUUID: TEST_UUID2], [project: 'AProject2', uuid: 'job2']] |
-                ['job2']
-    }
-
     @Unroll
     def "should scheduleJob"() {
         given:
@@ -217,6 +174,80 @@ class ScheduledExecutionServiceSpec extends Specification {
         1 * service.executionServiceBean.getExecutionsAreActive() >> executionsAreActive
         1 * service.quartzScheduler.scheduleJob(_, _) >> scheduleDate
         result == scheduleDate
+
+        where:
+        executionsAreActive | scheduleEnabled | executionEnabled | hasSchedule | expectScheduled
+        true                | true            | true             | true        | true
+    }
+
+    @Unroll
+    def "should not scheduleAdHocJob if no date/time"() {
+        given:
+        service.executionServiceBean = Mock(ExecutionService)
+        service.quartzScheduler = Mock(Scheduler) {
+            getListenerManager() >> Mock(ListenerManager)
+        }
+        service.frameworkService = Mock(FrameworkService) {
+            getRundeckBase() >> ''
+        }
+        def job = new ScheduledExecution(
+                createJobParams(
+                        scheduled: hasSchedule,
+                        scheduleEnabled: scheduleEnabled,
+                        executionEnabled: executionEnabled,
+                        userRoleList: 'a,b'
+                )
+        ).save()
+
+        when:
+        service.scheduleAdHocJob(job, "user", null, Mock(Execution), [:], [:], 0, null)
+
+        then:
+        1 * service.executionServiceBean.getExecutionsAreActive() >> executionsAreActive
+        IllegalArgumentException iae = thrown()
+        iae.getMessage() == "Scheduled date and time must be present"
+
+        where:
+        executionsAreActive | scheduleEnabled | executionEnabled | hasSchedule | expectScheduled
+        true                | true            | true             | true        | true
+    }
+
+    @Unroll
+    def "should not scheduleAdHocJob with time in past"() {
+        given:
+        service.executionServiceBean = Mock(ExecutionService)
+        service.quartzScheduler = Mock(Scheduler) {
+            getListenerManager() >> Mock(ListenerManager)
+        }
+        service.frameworkService = Mock(FrameworkService) {
+            getRundeckBase() >> ''
+        }
+        def job = new ScheduledExecution(
+                createJobParams(
+                        scheduled: hasSchedule,
+                        scheduleEnabled: scheduleEnabled,
+                        executionEnabled: executionEnabled,
+                        userRoleList: 'a,b',
+                        crontabString: "42 2 1 1 1 2 1999",
+                        year: "1999",
+                        month: "1",
+                        dayOfMonth: "1",
+                        hour: "1",
+                        minute: "2",
+                        seconds: "42"
+                )
+        ).save()
+
+        Date startTime = new Date()
+        startTime.set(year: 1999, month: 1, dayOfMonth: 1, hourOfDay: 1, minute: 2, seconds: 42)
+
+        when:
+        service.scheduleAdHocJob(job, "user", null, Mock(Execution), [:], [:], 0, startTime)
+
+        then:
+        1 * service.executionServiceBean.getExecutionsAreActive() >> executionsAreActive
+        IllegalArgumentException iae = thrown()
+        iae.getMessage() == "Cannot schedule a job in the past"
 
         where:
         executionsAreActive | scheduleEnabled | executionEnabled | hasSchedule | expectScheduled
@@ -827,10 +858,21 @@ class ScheduledExecutionServiceSpec extends Specification {
             }
             isClusterModeEnabled()>>enabled
             getServerUUID()>>uuid
+            getRundeckFramework()>>Mock(Framework){
+                getWorkflowStrategyService()>>Mock(WorkflowStrategyService){
+                    getStrategyForWorkflow(*_)>>Mock(WorkflowStrategy)
+                }
+            }
         }
         service.executionServiceBean=Mock(ExecutionService){
             executionsAreActive()>>false
         }
+        service.pluginService=Mock(PluginService)
+
+        service.executionUtilService=Mock(ExecutionUtilService){
+            createExecutionItemForWorkflow(_)>>Mock(WorkflowExecutionItem)
+        }
+        service.quartzScheduler = Mock(Scheduler)
         uuid
     }
 
@@ -1376,10 +1418,13 @@ class ScheduledExecutionServiceSpec extends Specification {
         results.scheduledExecution.serverNodeUUID == (enabled?uuid:null)
 
         where:
-        inparams            | enabled
-        [jobName: 'newName']| true
-        [jobName: 'newName']| false
+        inparams                               | enabled
+        [jobName: 'newName']                   | true
+        [jobName: 'newName']                   | false
+        [jobName: 'newName', scheduled: false] | true
+        [jobName: 'newName', scheduled: false] | false
     }
+
     def "do validate cluster mode sets serverNodeUUID when enabled"(){
         given:
         def uuid=setupDoValidate(enabled)
@@ -1392,6 +1437,8 @@ class ScheduledExecutionServiceSpec extends Specification {
         inparams                                                                    | enabled
         [scheduled: true, crontabString: '0 1 1 1 * ? *', useCrontabString: 'true'] | true
         [scheduled: true, crontabString: '0 1 1 1 * ? *', useCrontabString: 'true'] | false
+        [scheduled: false]                                                          | true
+        [scheduled: false]                                                          | false
     }
     def "do update job cluster mode sets serverNodeUUID when enabled"(){
         given:
@@ -1417,9 +1464,11 @@ class ScheduledExecutionServiceSpec extends Specification {
         results.scheduledExecution.jobName == 'newName'
 
         where:
-        inparams            | enabled
-        [jobName: 'newName']| true
-        [jobName: 'newName']| false
+        inparams                               | enabled
+        [jobName: 'newName']                   | true
+        [jobName: 'newName']                   | false
+        [jobName: 'newName', scheduled: false] | true
+        [jobName: 'newName', scheduled: false] | false
     }
 
     def "load jobs with error handlers"(){
@@ -1607,5 +1656,130 @@ class ScheduledExecutionServiceSpec extends Specification {
                         nodeIncludeName: 'test',
                         nodeExclude: 'testo',
                         nodeExcludeTags: 'dev']
+    }
+
+    def "reschedule scheduled jobs"() {
+        given:
+        def job1 = new ScheduledExecution(createJobParams(userRoleList: 'a,b', user: 'bob')).save()
+        service.executionServiceBean = Mock(ExecutionService)
+        service.quartzScheduler = Mock(Scheduler)
+        service.frameworkService = Mock(FrameworkService)
+        when:
+        def result = service.rescheduleJobs(null)
+
+        then:
+        job1.shouldScheduleExecution()
+        1 * service.executionServiceBean.getExecutionsAreActive() >> true
+        1 * service.frameworkService.getRundeckBase() >> ''
+        1 * service.frameworkService.isClusterModeEnabled() >> false
+        1 * service.quartzScheduler.checkExists(*_) >> false
+        1 * service.quartzScheduler.scheduleJob(_, _) >> new Date()
+    }
+
+    def "reschedule adhoc executions"() {
+        given:
+        def job1 = new ScheduledExecution(createJobParams(userRoleList: 'a,b', user: 'bob', scheduled: false)).save()
+        def exec1 = new Execution(
+                scheduledExecution: job1,
+                status: 'scheduled',
+                dateStarted: new Date() + 2,
+                dateCompleted: null,
+                project: job1.project,
+                user: 'bob',
+                workflow: new Workflow(commands: [new CommandExec(adhocRemoteString: "test exec")])
+        ).save(flush: true)
+        service.executionServiceBean = Mock(ExecutionService)
+        service.quartzScheduler = Mock(Scheduler)
+        service.frameworkService = Mock(FrameworkService)
+        when:
+        def result = service.rescheduleJobs(null)
+
+        then:
+        result.failedJobs.size() == 0
+        result.failedExecutions.size() == 0
+        result.jobs.size() == 0
+        result.executions.size() == 1
+        exec1 != null
+        !exec1.hasErrors()
+        !job1.shouldScheduleExecution()
+        job1.user == 'bob'
+        job1.userRoles == ['a', 'b']
+        1 * service.frameworkService.getAuthContextForUserAndRoles('bob', ['a', 'b']) >> Mock(UserAndRolesAuthContext)
+        1 * service.executionServiceBean.getExecutionsAreActive() >> true
+        1 * service.frameworkService.getRundeckBase() >> ''
+        1 * service.quartzScheduler.scheduleJob(_, _) >> new Date()
+    }
+    def "reschedule adhoc execution getAuthContext error"() {
+        given:
+        def job1 = new ScheduledExecution(createJobParams(userRoleList: 'a,b', user: 'bob', scheduled: false)).save()
+        def exec1 = new Execution(
+                scheduledExecution: job1,
+                status: 'scheduled',
+                dateStarted: new Date() + 2,
+                dateCompleted: null,
+                project: job1.project,
+                user: 'bob',
+                workflow: new Workflow(commands: [new CommandExec(adhocRemoteString: "test exec")])
+        ).save(flush: true)
+        service.executionServiceBean = Mock(ExecutionService)
+        service.quartzScheduler = Mock(Scheduler)
+        service.frameworkService = Mock(FrameworkService)
+        when:
+        def result = service.rescheduleJobs(null)
+
+        then:
+        result.failedJobs.size() == 0
+        result.failedExecutions.size() == 1
+        result.jobs.size() == 0
+        result.executions.size() == 0
+        exec1 != null
+        !exec1.hasErrors()
+        !job1.shouldScheduleExecution()
+        job1.user == 'bob'
+        job1.userRoles == ['a', 'b']
+        1 * service.frameworkService.getAuthContextForUserAndRoles('bob', ['a', 'b']) >> {
+            throw new RuntimeException("getAuthContextForUserAndRoles failure")
+        }
+        0 * service.executionServiceBean.getExecutionsAreActive() >> true
+        0 * service.frameworkService.getRundeckBase() >> ''
+        0 * service.quartzScheduler.scheduleJob(_, _) >> new Date()
+    }
+    def "update execution flags change node ownership"() {
+        given:
+        setupDoValidate(true)
+        def uuid = setupDoUpdate(true)
+        
+        def se = new ScheduledExecution(createJobParams()).save()
+        when:
+        def params = baseJobParams()+[
+                
+        ]
+        //def results = service._dovalidate(params, Mock(UserAndRoles))
+        def results = service._doUpdateExecutionFlags(
+                [id: se.id.toString(), executionEnabled: executionEnabled, scheduleEnabled: scheduleEnabled],
+                null,
+                null,
+                null,
+                null,
+                null
+        )
+        def ScheduledExecution scheduledExecution = results.scheduledExecution
+
+        then:
+        scheduledExecution != null
+        scheduledExecution instanceof ScheduledExecution
+        if(scheduleEnabled != null && executionEnabled != null){
+            scheduledExecution.serverNodeUUID == uuid
+        }else{
+            scheduledExecution.serverNodeUUID == null
+        }
+
+        where:
+        scheduleEnabled | executionEnabled
+        true            | true
+        null            | false
+        false           | true
+        true            | null
+        null            | null
     }
 }

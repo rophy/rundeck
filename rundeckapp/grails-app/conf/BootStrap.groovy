@@ -1,7 +1,24 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import com.codahale.metrics.MetricRegistry
 import com.codahale.metrics.health.HealthCheck
 import com.codahale.metrics.health.HealthCheckRegistry
 import com.dtolabs.launcher.Setup
+import com.dtolabs.rundeck.app.api.ApiMarshallerRegistrar
 import com.dtolabs.rundeck.core.Constants
 import com.dtolabs.rundeck.core.VersionConstants
 import com.dtolabs.rundeck.core.utils.ThreadBoundOutputStream
@@ -16,6 +33,8 @@ import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.context.support.WebApplicationContextUtils
 
 import javax.servlet.ServletContext
+import java.nio.charset.Charset
+import java.text.SimpleDateFormat
 
 class BootStrap {
 
@@ -37,6 +56,7 @@ class BootStrap {
     def scmService
     HealthCheckRegistry healthCheckRegistry
     def dataSource
+    ApiMarshallerRegistrar apiMarshallerRegistrar
 
     def timer(String name,Closure clos){
         long bstart=System.currentTimeMillis()
@@ -53,8 +73,19 @@ class BootStrap {
              grailsApplication.mainContext.profilerLog.appenderNames = ["loggingAppender", 'miniProfilerAppender']
          }
          long bstart=System.currentTimeMillis()
+         apiMarshallerRegistrar.registerApiMarshallers()
+         //version info
+         servletContext.setAttribute("version.build",VersionConstants.BUILD)
+         servletContext.setAttribute("version.date",VersionConstants.DATE)
+         servletContext.setAttribute("version.date_string",VersionConstants.DATE_STRING)
+         def shortBuildDate = new SimpleDateFormat("yyyy-MM-dd").format(VersionConstants.DATE)
+         servletContext.setAttribute("version.date_short", shortBuildDate)
+         servletContext.setAttribute("version.number",VersionConstants.VERSION)
+         servletContext.setAttribute("version.ident",VersionConstants.VERSION_IDENT)
          def appname=messageSource.getMessage('main.app.name',null,'',null) ?: messageSource.getMessage('main.app.default.name',null,'',null) ?: 'Rundeck'
-         log.info("Starting ${appname} ${grailsApplication.metadata['build.ident']}...")
+
+         servletContext.setAttribute("app.ident",grailsApplication.metadata['build.ident'])
+         log.info("Starting ${appname} ${servletContext.getAttribute('app.ident')} ($shortBuildDate) ...")
          /*filterInterceptor.handlers.sort { FilterToHandlerAdapter handler1,
                                            FilterToHandlerAdapter handler2 ->
              FilterConfig filter1 = handler1.filterConfig
@@ -228,6 +259,13 @@ class BootStrap {
          }else{
              log.info("RSS feeds disabled")
          }
+
+         if('true' == grailsApplication.config.rundeck.security.authorization.preauthenticated.enabled){
+             log.info("Preauthentication is enabled")
+         } else {
+             log.info("Preauthentication is disabled")
+         }
+
          if(grailsApplication.config.execution.follow.buffersize){
              servletContext.setAttribute("execution.follow.buffersize",grailsApplication.config.execution.follow.buffersize)
          }else{
@@ -313,6 +351,13 @@ class BootStrap {
              log.info("Rundeck is in PASSIVE MODE: No executions can be run.")
          }
 
+         if (!Charset.defaultCharset().equals(Charset.forName("UTF-8"))) {
+             log.warn("The JVM default encoding is not UTF-8: "
+                              + Charset.defaultCharset().displayName()
+                              + ", you may not see output as expected for multibyte locales. " +
+                              "Specify -Dfile.encoding=UTF-8 in the JVM options."
+             )
+         }
          //configure System.out and System.err so that remote command execution will write to a specific print stream
          if(Environment.getCurrent() != Environment.TEST){
 

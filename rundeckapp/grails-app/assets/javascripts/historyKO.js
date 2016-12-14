@@ -1,23 +1,23 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 //= require momentutil
 //= require knockout.min
 //= require knockout-foreachprop
 //= require knockout-mapping
-
-/*
- Copyright 2013 SimplifyOps Inc, <http://simplifyops.com>
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
- */
 
 
 function Report(data) {
@@ -34,6 +34,8 @@ function Report(data) {
     self.title = ko.observable();
     self.jobAverageDuration = ko.observable(0);
     self.duration = ko.observable(0);
+    self.timeNow = ko.observable(new Date());
+    window.setInterval(function() { self.timeNow(new Date()) }, 5000);
     //true if checked for bulk edit
     self.bulkEditSelected=ko.observable(false);
 
@@ -49,7 +51,12 @@ function Report(data) {
     self.endTimeSimple = ko.computed(function () {
         return MomentUtil.formatTimeSimple(self.dateCompleted());
     });
-    self.statusList=['running','succeed','succeeded','failed','cancel','aborted','retry','timedout','timeout','fail'];
+    self.timeToStart = ko.computed(function () {
+        self.timeNow();
+        return moment(self.dateStarted()).fromNow();
+    });
+    self.statusList = ['scheduled','running','succeed','succeeded','failed',
+        'cancel','aborted','retry','timedout','timeout','fail'];
 
     self.isCustomStatus = ko.computed(function () {
         return self.statusList.indexOf(self.status()) < 0 ;

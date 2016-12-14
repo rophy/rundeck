@@ -1,6 +1,6 @@
 /*
- * Copyright 2012 DTO Labs, Inc. (http://dtolabs.com)
- * 
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -12,7 +12,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
 /*
@@ -42,6 +41,8 @@ public class ServiceNameConstants {
      * Service name of the Workflow Step service
      */
     public static final String WorkflowStep = "WorkflowStep";
+    public static final String WorkflowExecution = "WorkflowExecution";
+    public static final String WorkflowStrategy = "WorkflowStrategy";
 
     public static final String NodeExecutor = "NodeExecutor";
     public static final String FileCopier = "FileCopier";
@@ -59,4 +60,5 @@ public class ServiceNameConstants {
     public static final String Orchestrator = "Orchestrator";
     public static final String ScmExport = "ScmExport";
     public static final String ScmImport = "ScmImport";
+    public static final String UI = "UI";
 }

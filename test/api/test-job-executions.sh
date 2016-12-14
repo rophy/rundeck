@@ -155,7 +155,10 @@ echo "TEST: job/id/executions?status=succeeded should succeed with 1 results"
 runurl="${APIURL}/job/${jobid}/executions"
 params="status=succeeded"
 
-sleep 6
+api_waitfor_execution $execid || {
+  errorMsg "Failed to wait for execution $execid to finish"
+  exit 2
+}
 
 # get listing
 docurl ${runurl}?${params} > $DIR/curl.out || fail "failed request: ${runurl}"
@@ -200,7 +203,7 @@ else
 fi
 
 #wait for execution to finish
-rd-queue follow -q -e $execid || fail "Waiting for execution $execid to finish"
+api_waitfor_execution $execid || fail "Waiting for execution $execid to finish"
 $SHELL $SRC_DIR/api-expect-exec-success.sh $execid || fail "Wrong exit status for exec $execid"
 
 ###
@@ -406,7 +409,13 @@ else
 fi
 
 # let job finish
-sleep 6
+
+
+
+api_waitfor_execution $execid || {
+  errorMsg "Failed to wait for execution $execid to finish"
+  exit 2
+}
 
 ###
 # Test result of /job/ID/executions?status=failed is 1 list

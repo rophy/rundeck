@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck
 
 import grails.test.GrailsUnitTestCase
@@ -85,6 +101,23 @@ class ScheduledExecutionTest  {
         def jobMap = se.toMap()
         assertNotNull(jobMap)
         assertEquals(true,jobMap.nodesSelectedByDefault)
+    }
+    void testToMapNodeFilterEditable() {
+        ScheduledExecution se = createBasicScheduledExecution()
+        se.nodeFilterEditable=true
+        def jobMap = se.toMap()
+        assertNotNull(jobMap)
+        assertNotNull(jobMap.nodeFilterEditable)
+        assertEquals(true,jobMap.nodeFilterEditable)
+    }
+
+    void testToMapNodeFilterNotEditable() {
+        ScheduledExecution se = createBasicScheduledExecution()
+        se.nodeFilterEditable=false
+        def jobMap = se.toMap()
+        assertNotNull(jobMap)
+        assertNotNull(jobMap.nodeFilterEditable)
+        assertEquals(false,jobMap.nodeFilterEditable)
     }
 
     void testFromMapScheduleCrontabString() {
@@ -319,6 +352,30 @@ class ScheduledExecutionTest  {
         assertEquals('*',se.year)
         assertEquals('?',se.dayOfMonth)
         assertEquals('*',se.dayOfWeek)
+    }
+
+    void testFromMapNodeFilterEditable() {
+        ScheduledExecution se = ScheduledExecution.fromMap(
+                [
+                        jobName: 'abc',
+                        nodeFilterEditable: true
+                ]
+        )
+        assertNotNull(se)
+        assertNotNull(se.nodeFilterEditable)
+        assertEquals(true, se.nodeFilterEditable)
+    }
+
+    void testFromMapNodeFilterNotEditable() {
+        ScheduledExecution se = ScheduledExecution.fromMap(
+                [
+                        jobName: 'abc',
+                        nodeFilterEditable: false
+                ]
+        )
+        assertNotNull(se)
+        assertNotNull(se.nodeFilterEditable)
+        assertEquals(false, se.nodeFilterEditable)
     }
 
     void testValidateBasic() {

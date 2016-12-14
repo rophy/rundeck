@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dtolabs.rundeck.core.cli.acl;
 
 import com.dtolabs.rundeck.core.Constants;
@@ -7,9 +23,7 @@ import com.dtolabs.rundeck.core.authorization.*;
 import com.dtolabs.rundeck.core.authorization.providers.*;
 import com.dtolabs.rundeck.core.cli.*;
 import com.dtolabs.rundeck.core.common.Framework;
-import com.dtolabs.rundeck.core.common.FrameworkFactory;
 import com.dtolabs.rundeck.core.common.FrameworkProject;
-import com.dtolabs.rundeck.core.utils.IPropertyLookup;
 import org.apache.commons.cli.*;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
@@ -103,36 +117,21 @@ public class AclTool extends BaseTool {
     public AclTool(final CLIToolLogger cliToolLogger)
             throws IOException, PoliciesParseException
     {
-        this(cliToolLogger, Constants.getSystemBaseDir());
-    }
-
-    public AclTool(final CLIToolLogger cliToolLogger, final String rdeckBase)
-            throws IOException, PoliciesParseException
-    {
-        this(
-                cliToolLogger,
-                rdeckBase,
-                null!=rdeckBase?FrameworkFactory.createFilesystemFramework(new File(rdeckBase)).getPropertyLookup():null
-        );
+        this(cliToolLogger, System.getProperty("rdeck.base"));
     }
 
     private String configDir;
 
-    public AclTool(final CLIToolLogger cliToolLogger, final String rdeckBase, final IPropertyLookup frameworkProps)
+    public AclTool(final CLIToolLogger cliToolLogger, final String rdeckBase)
             throws IOException, PoliciesParseException
     {
-
         if (null == cliToolLogger) {
             PropertyConfigurator.configure(Constants.getLog4jPropertiesFile().getAbsolutePath());
             clilogger = new Log4JCLIToolLogger(log4j);
         } else {
             this.clilogger = cliToolLogger;
         }
-        if(null!=frameworkProps) {
-            configDir = frameworkProps.hasProperty("framework.etc.dir") ? frameworkProps.getProperty(
-                    "framework.etc.dir"
-            ) : Constants.getFrameworkConfigDir(rdeckBase);
-        }
+        configDir = System.getProperty("rdeck.config", rdeckBase + "/" + "etc");
 
 
         final TestOptions testOptions = new TestOptions();
@@ -610,7 +609,7 @@ public class AclTool extends BaseTool {
                     subject,
                     resources(resourceMap),
                     new HashSet<>(appProjectActions),
-                    Framework.RUNDECK_APP_ENV
+                    createAppEnv()
             );
         }else{
             log("\n(No project (-p) specified, skipping Application context actions for a specific project.)\n");
@@ -626,7 +625,7 @@ public class AclTool extends BaseTool {
                     subject,
                     resources(resourceMap),
                     new HashSet<>(appProjectAclActions),
-                    Framework.RUNDECK_APP_ENV
+                    createAppEnv()
             );
         }else{
             log("\n(No project_acl (-P) specified, skipping Application context actions for a ACLs for a specific project.)\n");
@@ -639,7 +638,7 @@ public class AclTool extends BaseTool {
                     subject,
                     resources(resourceMap),
                     new HashSet<>(appStorageActions),
-                    Framework.RUNDECK_APP_ENV
+                    createAppEnv()
             );
         }else{
             log("\n(No storage path (-s) specified, skipping Application context actions for a specific storage " +
@@ -653,7 +652,7 @@ public class AclTool extends BaseTool {
                     subject,
                     resources(AuthorizationUtil.resourceTypeRule(kind)),
                     new HashSet<>(appKindActionsByType.get(kind)),
-                    Framework.RUNDECK_APP_ENV
+                    createAppEnv()
             );
         }
 
@@ -663,7 +662,7 @@ public class AclTool extends BaseTool {
             log("\n(No project (-p) specified, skipping Project context listing.)");
             return;
         }
-        Set<Attribute> projectEnv = FrameworkProject.authorizationEnvironment(argProject);
+        Set<Attribute> projectEnv = createAuthEnvironment(argProject);
 
         log("\n# Project \"" + argProject + "\" access for " + subjdesc + "\n");
         //adhoc
@@ -723,6 +722,14 @@ public class AclTool extends BaseTool {
         }
 
 
+    }
+
+    private static Set<Attribute> createAppEnv() {
+        return Framework.RUNDECK_APP_ENV;
+    }
+
+    private Set<Attribute> createAuthEnvironment(final String argProject) {
+        return FrameworkProject.authorizationEnvironment(argProject);
     }
 
     /**
@@ -1011,9 +1018,7 @@ public class AclTool extends BaseTool {
             );
         }
         boolean appContext = argContext == Context.application;
-        Set<Attribute> environment = appContext ? Framework.RUNDECK_APP_ENV : FrameworkProject.authorizationEnvironment(
-                argProject
-        );
+        Set<Attribute> environment = appContext ? createAppEnv() : createAuthEnvironment(argProject);
 
         //determine subject
 
@@ -1477,13 +1482,18 @@ public class AclTool extends BaseTool {
                     }
 
                     AuthRequest request = new AuthRequest();
+                    boolean isAppContext = env.equals(
+                            EnvironmentalContext.URI_BASE +
+                            "application:rundeck"
+                    ) || env.equals(
+                            //backwards compatibility for old audit logs
+                            "http://dtolabs.com/rundeck/auth/env/" +
+                            "application:rundeck"
+                    );
                     request.environment =
-                            env.equals(
-                                    EnvironmentalContext.URI_BASE +
-                                    "application:rundeck"
-                            ) ?
-                            Framework.RUNDECK_APP_ENV :
-                            FrameworkProject.authorizationEnvironment(env.substring(env.lastIndexOf(":") + 1));
+                            isAppContext ?
+                            createAppEnv() :
+                            createAuthEnvironment(env.substring(env.lastIndexOf(":") + 1));
                     request.actions = new HashSet<>(Arrays.asList(action));
                     request.resourceMap = resourceMap;
                     request.subject = subject;
@@ -1631,7 +1641,7 @@ public class AclTool extends BaseTool {
         HashMap<String, Object> stringHashMap = new HashMap<>();
         //context
         Map<String, Object> ruleMap = new HashMap<>();
-        if (authRequest.environment.equals(Framework.RUNDECK_APP_ENV)) {
+        if (authRequest.environment.equals(createAppEnv())) {
             //app context
             HashMap<String, String> s = new HashMap<>();
             s.put("application", "rundeck");
@@ -1834,7 +1844,7 @@ public class AclTool extends BaseTool {
         Set<Attribute> environment;
 
         boolean isAppContext() {
-            return environment.equals(Framework.RUNDECK_APP_ENV);
+            return environment.equals(createAppEnv());
         }
 
         Set<String> denyActions;

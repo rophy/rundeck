@@ -1,3 +1,19 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%@ page import="com.dtolabs.rundeck.server.authorization.AuthConstants" %>
 
 <g:if test="${!execution.dateCompleted}">
@@ -19,7 +35,12 @@
                         <g:message code="execution.identity" args="[execution.id]"/>
                     </g:link>
                 </span>
-            <g:if test="${null != execution.dateCompleted}">
+            <g:if test="${execution.status == 'scheduled' && execution.dateCompleted == null}">
+                <span class="succeed">
+                    Scheduled
+                </span>
+            </g:if>
+            <g:elseif test="${null != execution.dateCompleted}">
 
                 <span class="${execution.status == 'true' ? 'succeed' : 'fail'}">
                     <g:if test="${execution.status == 'true'}">
@@ -32,7 +53,7 @@
                         Failed
                     </g:else>
                 </span>
-            </g:if>
+            </g:elseif>
             <g:else>
                 <span id="runstatus">
                     <span class="nowrunning">
@@ -226,4 +247,15 @@
 <div id="commandPerform" class="commandcontent ansicolor ansicolor-on" style="display:none;  "></div>
 
 <div id="log"></div>
+<div id="commandPerform_empty" style="display: none">
+    <div class="row"><div class="col-sm-12">
+        <div class="well well-nobg inline">
+            <p class="text-muted">
+                <i class="glyphicon glyphicon-info-sign"></i>
+                <em><g:message code="execution.log.no.output"/></em>
+            </p>
+        </div>
+    </div>
+    </div>
+</div>
 </div>

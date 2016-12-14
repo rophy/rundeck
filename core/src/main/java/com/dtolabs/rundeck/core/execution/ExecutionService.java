@@ -1,17 +1,17 @@
 /*
- * Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -49,20 +49,6 @@ import java.io.InputStream;
  */
 public interface ExecutionService extends FrameworkSupportService {
     public static final String SERVICE_NAME = "ExecutionService";
-    /**
-     * Execute the item for the given context and return the result.
-     *
-     *
-     * @param context context
-     * @param item item
-     *
-     * @return result
-     * @deprecated use {@link #executeStep(com.dtolabs.rundeck.core.execution.workflow.StepExecutionContext, StepExecutionItem)}
-     * @throws com.dtolabs.rundeck.core.execution.service.ExecutionServiceException on error
-     * @throws ExecutionException on execution error
-     */
-    public ExecutionResult executeItem(StepExecutionContext context, StepExecutionItem item)
-        throws ExecutionException, ExecutionServiceException;
 
     /**
      * Execute a workflow step item for the given context and return the result.

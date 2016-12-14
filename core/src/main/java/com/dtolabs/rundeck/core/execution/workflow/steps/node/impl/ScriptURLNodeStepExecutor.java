@@ -1,17 +1,17 @@
 /*
- * Copyright 2012 DTO Solutions, Inc. (http://dtosolutions.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -30,10 +30,6 @@ import com.dtolabs.rundeck.core.common.UpdateUtils;
 import com.dtolabs.rundeck.core.common.impl.URLFileUpdater;
 import com.dtolabs.rundeck.core.common.impl.URLFileUpdaterBuilder;
 import com.dtolabs.rundeck.core.dispatcher.DataContextUtils;
-import com.dtolabs.rundeck.core.execution.ExecArgList;
-import com.dtolabs.rundeck.core.execution.ExecutionService;
-import com.dtolabs.rundeck.core.execution.service.FileCopierException;
-import com.dtolabs.rundeck.core.execution.service.NodeExecutorResult;
 import com.dtolabs.rundeck.core.execution.workflow.StepExecutionContext;
 import com.dtolabs.rundeck.core.execution.workflow.steps.FailureReason;
 import com.dtolabs.rundeck.core.execution.workflow.steps.StepFailureReason;
@@ -42,7 +38,6 @@ import com.dtolabs.rundeck.core.execution.workflow.steps.node.NodeStepExecutionI
 import com.dtolabs.rundeck.core.execution.workflow.steps.node.NodeStepExecutor;
 import com.dtolabs.rundeck.core.execution.workflow.steps.node.NodeStepResult;
 import com.dtolabs.rundeck.core.utils.Converter;
-import com.dtolabs.rundeck.core.utils.ScriptExecUtil;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.httpclient.URIException;
 import org.apache.commons.httpclient.util.URIUtil;
@@ -72,6 +67,7 @@ public class ScriptURLNodeStepExecutor implements NodeStepExecutor {
 
     private Framework framework;
     URLFileUpdater.httpClientInteraction interaction;
+    private ScriptFileNodeStepUtils scriptUtils = new DefaultScriptFileNodeStepUtils();
 
     public ScriptURLNodeStepExecutor(Framework framework) {
         this.framework = framework;
@@ -90,6 +86,15 @@ public class ScriptURLNodeStepExecutor implements NodeStepExecutor {
         }
         return Integer.toString(url.hashCode());
     }
+
+    public ScriptFileNodeStepUtils getScriptUtils() {
+        return scriptUtils;
+    }
+
+    public void setScriptUtils(ScriptFileNodeStepUtils scriptUtils) {
+        this.scriptUtils = scriptUtils;
+    }
+
     static enum Reason implements FailureReason{
         /**
          * Failed to download required URL
@@ -108,7 +113,11 @@ public class ScriptURLNodeStepExecutor implements NodeStepExecutor {
         if (!USE_CACHE) {
             destinationTempFile.deleteOnExit();
         }
-        return ScriptFileNodeStepExecutor.executeScriptFile(
+        boolean expandTokens = true;
+        if (context.getFramework().hasProperty("execution.script.tokenexpansion.enabled")) {
+            expandTokens = "true".equals(context.getFramework().getProperty("execution.script.tokenexpansion.enabled"));
+        }
+        return scriptUtils.executeScriptFile(
                 context,
                 node,
                 null,
@@ -118,7 +127,8 @@ public class ScriptURLNodeStepExecutor implements NodeStepExecutor {
                 script.getArgs(),
                 script.getScriptInterpreter(),
                 script.getInterpreterArgsQuoted(),
-                framework.getExecutionService()
+                framework.getExecutionService(),
+                expandTokens
         );
     }
 

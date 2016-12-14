@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.client.utils.Constants
@@ -140,6 +156,15 @@ class ReportsController extends ControllerBase{
                 params.project), AuthConstants.ACTION_READ, 'Events for project', params.project)) {
             return
         }
+        if (params.max != null && params.max != query.max.toString()) {
+            query.errors.rejectValue('max', 'typeMismatch.java.lang.Integer', ['max'] as Object[], 'invalid')
+        }
+        if (params.offset != null && params.offset != query.offset.toString()) {
+            query.errors.rejectValue('offset', 'typeMismatch.java.lang.Integer', ['offset'] as Object[], 'invalid')
+        }
+        if (query.hasErrors()) {
+            return render(view: '/common/error', model: [beanErrors: query.errors])
+        }
         def User u = userService.findOrCreateUser(session.user)
         
         if(params.filterName){
@@ -244,7 +269,7 @@ class ReportsController extends ControllerBase{
         results.params=params
         return results
     }
-    def eventsAjax={ ExecQuery query ->
+    def eventsAjax(ExecQuery query){
         AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,params.project)
 
 
@@ -272,12 +297,22 @@ class ReportsController extends ControllerBase{
 
                 }
             }
+            map.jobName= map.remove('reportId')
             if(map.jcJobId){
                 map.jobId= map.remove('jcJobId')
                 try {
                     def job = ScheduledExecution.get(Long.parseLong(map.jobId))
                     map.jobId=job?.extid
                     map.jobDeleted = job==null
+                    map['jobPermalink']= createLink(
+                            controller: 'scheduledExecution',
+                            action: 'show',
+                            absolute: true,
+                            id: job?.extid,
+                            params:[project:job?.project]
+                    )
+                    map.jobName=job?.jobName
+                    map.jobGroup=job?.groupPath
                 }catch(Exception e){
                 }
                 if(map.execution.argString){
@@ -285,24 +320,11 @@ class ReportsController extends ControllerBase{
                 }
             }
             map.user= map.remove('author')
-            map.jobName= map.remove('reportId')
             map.executionString= map.remove('title')
             return map
         }
         results.params=params
         render(contentType: 'application/json', text: results as JSON)
-    }
-    def jobsFragment={ ExecQuery query ->
-        AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,params.project)
-
-        if (unauthorizedResponse(frameworkService.authorizeProjectResourceAll(authContext, AuthorizationUtil
-                .resourceType('event'), [AuthConstants.ACTION_READ],
-                params.project), AuthConstants.ACTION_READ, 'Events for project', params.project)) {
-            return
-        }
-        def results = jobs(query)
-        results.params=params
-        render(view:'eventsFragment',model:results)
     }
 
 
@@ -461,9 +483,10 @@ class ReportsController extends ControllerBase{
         def model=reportService.getExecutionReports(query,true)
         model = reportService.finishquery(query,params,model)
 
-        def statusMap=[
-                succeed:ExecutionService.EXECUTION_SUCCEEDED,
-                (ExecutionService.EXECUTION_SUCCEEDED):ExecutionService.EXECUTION_SUCCEEDED,
+        def statusMap = [scheduled: ExecutionService.EXECUTION_SCHEDULED,
+            (ExecutionService.EXECUTION_SCHEDULED): ExecutionService.EXECUTION_SCHEDULED,
+            succeed: ExecutionService.EXECUTION_SUCCEEDED,
+            (ExecutionService.EXECUTION_SUCCEEDED): ExecutionService.EXECUTION_SUCCEEDED,
             cancel: ExecutionService.EXECUTION_ABORTED,
             (ExecutionService.EXECUTION_ABORTED): ExecutionService.EXECUTION_ABORTED,
             fail: ExecutionService.EXECUTION_FAILED,

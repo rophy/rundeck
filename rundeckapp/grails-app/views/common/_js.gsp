@@ -1,3 +1,19 @@
+%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
 <%@ page import="grails.util.Environment" %>
 <script type="text/javascript">
     <g:set var="currentProject" value="${params.project?:request.project}"/>
@@ -13,6 +29,8 @@
         executionCancelExecution: '${createLink(controller:"execution",action:"cancelExecution",params:[format:'json'])}',
         tailExecutionOutput: '${createLink(controller: "execution", action: "tailExecutionOutput",params:[format:'json'])}',
         reportsEventsFragment:"${createLink(controller:'reports',action:'eventsFragment',params:projParams)}",
+        executionAjaxExecState: "${createLink(action: 'ajaxExecState', controller: 'execution')}",
+        executionAjaxExecNodeState: "${createLink(action: 'ajaxExecNodeState', controller: 'execution')}",
         frameworkViewResourceModelConfig: "${createLink(action: 'viewResourceModelConfig', controller: 'framework')}",
         frameworkCheckResourceModelConfig: "${createLink(action: 'checkResourceModelConfig', controller: 'framework')}",
         frameworkEditResourceModelConfig: "${createLink(action: 'editResourceModelConfig', controller: 'framework')}",
@@ -29,13 +47,18 @@
         menuHomeAjax: "${g.createLink(controller: 'menu', action: 'homeAjax',params:projParams)}",
         menuHomeSummaryAjax: "${g.createLink(controller: 'menu', action: 'homeSummaryAjax',params:projParams)}",
         menuProjectNamesAjax: "${g.createLink(controller: 'menu', action: 'projectNamesAjax',params:projParams)}",
+        menuJobsAjax: "${g.createLink(controller: 'menu', action: 'jobsAjax',params:[format:'json'])}",
         scheduledExecutionRunAdhocInline: "${createLink(controller:'scheduledExecution',action:'runAdhocInline',params:projParams)}",
         scheduledExecutionCreate: "${createLink(controller:'scheduledExecution',action:'create',params:projParams)}",
         scheduledExecutionExecuteFragment: '${createLink(controller:"scheduledExecution",action:"executeFragment",params:projParams)}',
         scheduledExecutionActionMenuFragment: '${createLink(controller:"scheduledExecution",action:"actionMenuFragment",params:projParams)}',
         scheduledExecutionRunJobInline: '${createLink(controller:"scheduledExecution",action:"runJobInline",params:projParams)}',
+        scheduledExecutionScheduleJobInline: '${createLink(controller:"scheduledExecution",action:"scheduleJobInline",params:projParams)}',
         scheduledExecutionDetailFragment: '${createLink(controller:'scheduledExecution',action:'detailFragment',params: projParams)}',
         scheduledExecutionDetailFragmentAjax: '${createLink(controller:'scheduledExecution',action:'detailFragmentAjax',params: projParams)}',
+        scheduledExecutionJobExecutionsAjax: '${createLink(controller:'scheduledExecution',action:'jobExecutionsAjax',params: projParams)}',
+        scheduledExecutionSanitizeHtml: '${createLink(controller:'scheduledExecution',action:'sanitizeHtml',params: projParams)}',
+        scheduledExecutionWorkflowJson: '${createLink(controller:'scheduledExecution',action:'workflowJson',params: projParams)}',
         executionFollowFragment: "${createLink(controller:'execution',action:'followFragment',params:projParams)}",
         adhocHistoryAjax: "${createLink(controller:'execution',action:'adhocHistoryAjax',params:projParams)}",
         menuJobs: "${createLink(controller:'menu',action:'jobs',params: projParams)}",
@@ -60,6 +83,7 @@
         editOptsRenderAll: '${createLink(controller:"editOpts",action:"renderAll",params:projParams)}',
         editOptsRenderSummary: '${createLink(controller:"editOpts",action:"renderSummary",params:projParams)}',
         editOptsRemove: '${createLink(controller:"editOpts",action:"remove",params:projParams)}',
+        editOptsReorder: '${createLink(controller:"editOpts",action:"reorder",params:projParams)}',
         editOptsUndo: '${createLink(controller:"editOpts",action:"undo",params:projParams)}',
         editOptsRedo: '${createLink(controller:"editOpts",action:"redo",params:projParams)}',
         editOptsRevert: '${createLink(controller:"editOpts",action:"revert",params:projParams)}',

@@ -1,30 +1,36 @@
 #!/usr/bin/env groovy
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 
 //Test the result of the build to verify expected artifacts are created
 
-def target
+def target="build/libs"
 
 def props=new Properties()
 new File('gradle.properties').withReader{
     props.load(it)
 }
 args.each{
-    if("-maven" == it){
-        target="target"
-    }else if("-gradle" == it){
-        target="build/libs"
-    }else{
-        def m=it=~/^-[PD](.+?)(=(.+))?$/
-        if(m.matches()){
-            props[m[0][1]]=m[0][2]?m[0][3]:true
-        }
+    def m=it=~/^-[PD](.+?)(=(.+))?$/
+    if(m.matches()){
+        props[m[0][1]]=m[0][2]?m[0][3]:true
     }
 }
 
-if(!target){
-    println "ERROR: specify -maven or -gradle to indicate build file locations"
-    System.exit(2)
-}
 
 def tag="-SNAPSHOT"
 if(props.'release'){
@@ -34,7 +40,9 @@ def debug=Boolean.getBoolean('debug')?:("-debug" in args)
 def version=props.currentVersion+tag
 //versions of dependency we want to verify
 def versions=[
-        mysql:'5.1.35'
+        mysql:'5.1.35',
+        jetty:'9.0.7.v20131107',
+        servlet:'3.0.0.v201112011016'
 ]
 
 def warFile= "rundeckapp/target/rundeck-${version}.war"
@@ -85,11 +93,17 @@ def manifest=[
         "templates/config/rundeck-config.properties.template",
         "templates/config/ssl.properties.template",
         "templates/sbin/rundeckd.template",
-        "lib/#7",
-        "lib/jetty-all-7.6.0.v20120127.jar",
+        "lib/#13",
+        "lib/jetty-all-${versions.jetty}.jar",
+        "lib/jetty-jaas-${versions.jetty}.jar",
+        "lib/jetty-server-${versions.jetty}.jar",
+        "lib/jetty-util-${versions.jetty}.jar",
+        "lib/jetty-http-${versions.jetty}.jar",
+        "lib/jetty-io-${versions.jetty}.jar",
+        "lib/jetty-security-${versions.jetty}.jar",
         "lib/log4j-1.2.16.jar",
         "lib/rundeck-jetty-server-${version}.jar",
-        "lib/servlet-api-2.5.jar",
+        "lib/javax.servlet-${versions.servlet}.jar",
         "lib/jna-3.2.2.jar",
         "lib/libpam4j-1.5.jar",
         "lib/not-yet-commons-ssl-0.3.11.jar",

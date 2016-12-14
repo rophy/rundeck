@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import grails.test.mixin.TestFor
 import grails.test.mixin.web.ControllerUnitTestMixin
 import org.codehaus.groovy.grails.plugins.databinding.DataBindingGrailsPlugin
@@ -6,21 +22,6 @@ import rundeck.*
 import rundeck.codecs.JobsXMLCodec
 import rundeck.controllers.JobXMLException
 
-/*
-* Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*        http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
 /*
  * JobsXMLCodecTests.java
  * 
@@ -3789,7 +3790,8 @@ void testDecodeBasic__no_group(){
                         options:[new Option([name:'delay',defaultValue:'12']), new Option([name:'monkey',defaultValue:'cheese']), new Option([name:'particle',defaultValue:'true'])] as TreeSet,
                         nodeThreadcount:1,
                         nodeKeepgoing:true,
-                        doNodedispatch:true
+                        doNodedispatch:true,
+                        uuid:UUID.randomUUID().toString()
                 )
         ]
         def  xmlstr = JobsXMLCodec.encode(jobs1)
@@ -3801,6 +3803,9 @@ void testDecodeBasic__no_group(){
             assertEquals "wrong root node name",'joblist',doc.name()
             assertEquals "wrong number of jobs",1,doc.job.size()
             assertEquals "wrong name","test job 1",doc.job[0].name[0].text()
+        assertEquals "incorrect uuid", 1, doc.job[0].uuid.size()
+        assertEquals "incorrect uuid", jobs1[0].uuid, doc.job[0].uuid[0].text()
+        assertEquals "incorrect id", 1, doc.job[0].id.size()
             assertEquals "wrong description","test descrip",doc.job[0].description[0].text()
             assertEquals "wrong loglevel","INFO",doc.job[0].loglevel[0].text()
             assertEquals "wrong scheduleEnabled", "true", doc.job[0].scheduleEnabled[0].text()
@@ -3818,6 +3823,45 @@ void testDecodeBasic__no_group(){
 
             assertEquals "incorrect dispatch threadcount",'1',doc.job[0].dispatch[0].threadcount[0].text()
             assertEquals "incorrect dispatch keepgoing",'true',doc.job[0].dispatch[0].keepgoing[0].text()
+
+
+    }
+
+    void testEncodeBasicStripUuid() {
+        def XmlSlurper parser = new XmlSlurper()
+        def jobs1 = [
+                new ScheduledExecution(
+                        jobName: 'test job 1',
+                        description: 'test descrip',
+                        loglevel: 'INFO',
+                        project: 'test1',
+                        workflow: new Workflow(
+                                keepgoing: true,
+                                commands: [new CommandExec(
+                                        [adhocRemoteString: 'test buddy', argString: '-delay 12 -monkey cheese ' +
+                                                '-particle']
+                                )]
+                        ),
+                        options: [new Option([name: 'delay', defaultValue: '12']), new Option(
+                                [name: 'monkey', defaultValue: 'cheese']
+                        ), new Option([name: 'particle', defaultValue: 'true'])] as TreeSet,
+                        nodeThreadcount: 1,
+                        nodeKeepgoing: true,
+                        doNodedispatch: true,
+                        uuid: UUID.randomUUID().toString()
+                )
+        ]
+        def xmlstr = JobsXMLCodec.encodeStripUuid(jobs1)
+        assertNotNull xmlstr
+        assertTrue xmlstr instanceof String
+
+        def doc = parser.parse(new StringReader(xmlstr))
+        assertNotNull doc
+        assertEquals "wrong root node name", 'joblist', doc.name()
+        assertEquals "wrong number of jobs", 1, doc.job.size()
+        assertEquals "wrong name", "test job 1", doc.job[0].name[0].text()
+        assertEquals "incorrect uuid", 0, doc.job[0].uuid.size()
+        assertEquals "incorrect id", 0, doc.job[0].id.size()
 
 
     }

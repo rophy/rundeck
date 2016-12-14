@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.services
 
 import com.dtolabs.rundeck.core.authentication.Group
@@ -44,6 +60,7 @@ import rundeck.PluginStep
 import rundeck.ScheduledExecution
 
 import javax.security.auth.Subject
+import java.nio.charset.Charset
 
 /**
  * Interfaces with the core Framework object
@@ -51,6 +68,7 @@ import javax.security.auth.Subject
 class FrameworkService implements ApplicationContextAware {
 
     static transactional = false
+    public static final String REMOTE_CHARSET = 'remote.charset.default'
 
     boolean initialized = false
     private String serverUUID
@@ -67,6 +85,27 @@ class FrameworkService implements ApplicationContextAware {
         return rundeckFramework.baseDir.absolutePath;
     }
 
+    /**
+     * Install all the embedded plugins, will not overwrite existing plugin files with the same name
+     * @param grailsApplication
+     * @return
+     */
+    def listEmbeddedPlugins(GrailsApplication grailsApplication) {
+        def loader = new ApplicationContextPluginFileSource(grailsApplication.mainContext, '/WEB-INF/rundeck/plugins/')
+        def result = [success: true, logs: []]
+        def pluginsDir = getRundeckFramework().getLibextDir()
+        def pluginList
+        try {
+            pluginList = loader.listManifests()
+        } catch (IOException e) {
+            log.error("Could not load plugins: ${e}", e)
+            result.message = "Could not load plugins: ${e}"
+            result.success = false
+            return result
+        }
+        result.pluginList=pluginList
+        return result
+    }
     /**
      * Install all the embedded plugins, will not overwrite existing plugin files with the same name
      * @param grailsApplication
@@ -846,10 +885,10 @@ class FrameworkService implements ApplicationContextAware {
         def result=[:]
         result.valid=false
         result.desc = description
-        result.props = parseResourceModelConfigInput(result.desc, prefix, params)
+        result.props = parseResourceModelConfigInput(description, prefix, params)
 
-        if (result.desc) {
-            def report = Validator.validate(result.props as Properties, result.desc)
+        if (description) {
+            def report = Validator.validate(result.props as Properties, description)
             if (report.valid) {
                 result.valid = true
             }
@@ -1027,6 +1066,26 @@ class FrameworkService implements ApplicationContextAware {
         }
         properties
     }
+    /**
+     * Convert property keys in a Validator.Report to the mapped property names for the provider properties
+     * @param report a validator report
+     * @param serviceType service type
+     * @param service plugin service
+     * @return Report with error keys using the property mappings
+     */
+    public Validator.Report remapReportProperties(Validator.Report report, String serviceType, PluggableProviderRegistryService service) {
+        def properties = [:]
+        if (serviceType) {
+            try {
+                final desc = service.providerOfType(serviceType).description
+                properties = Validator.mapProperties(report.errors, desc)
+            } catch (ExecutionServiceException e) {
+                log.error(e.message)
+                log.debug(e.message,e)
+            }
+        }
+        Validator.buildReport().errors(properties).build()
+    }
 
 
     public ProviderService getFileCopierService() {
@@ -1075,5 +1134,20 @@ class FrameworkService implements ApplicationContextAware {
         if (config && config instanceof Map) {
             projectProperties.putAll(Validator.mapProperties(config, desc))
         }
+    }
+
+    Map<String, String> getProjectGlobals(final String project) {
+        rundeckFramework.getProjectGlobals(project)
+    }
+
+    String getDefaultInputCharsetForProject(final String project) {
+        def config = rundeckFramework.getFrameworkProjectMgr().loadProjectConfig(project)
+        String charsetname
+        if(config.hasProperty("project.$REMOTE_CHARSET")) {
+            charsetname=config.getProperty("project.${REMOTE_CHARSET}")
+        }else if (config.hasProperty("framework.$REMOTE_CHARSET")) {
+            charsetname=config.getProperty("framework.$REMOTE_CHARSET")
+        }
+        return charsetname
     }
 }

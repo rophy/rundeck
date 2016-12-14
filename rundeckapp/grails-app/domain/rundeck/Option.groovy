@@ -1,15 +1,11 @@
-package rundeck
-
-import java.util.regex.Pattern
-
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +13,11 @@ import java.util.regex.Pattern
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package rundeck
+
+import java.util.regex.Pattern
+
 /*
  * Option domain class, stores the definition of allowable user inputs for a
  * CLI option for a WOrkflow Job (ScheduledExecution)
@@ -45,6 +46,8 @@ public class Option implements Comparable{
     String defaultStoragePath
     Boolean enforced
     Boolean required
+    Boolean isDate
+    String dateFormat
     SortedSet<String> values
     static hasMany = [values:String]
     URL valuesUrl
@@ -69,6 +72,8 @@ public class Option implements Comparable{
         defaultStoragePath(nullable:true,matches: '^(/?)keys/.+')
         enforced(nullable:false)
         required(nullable:true)
+        isDate(nullable:true)
+        dateFormat(nullable: true, maxSize: 30)
         values(nullable:true)
         valuesUrl(nullable:true)
         valuesUrlLong(nullable:true)
@@ -102,6 +107,10 @@ public class Option implements Comparable{
         }
         if(required){
             map.required=required
+        }
+        if(isDate){
+            map.isDate=isDate
+            map.dateFormat=dateFormat
         }
         if(description){
             map.description=description
@@ -139,6 +148,10 @@ public class Option implements Comparable{
         opt.name=name
         opt.enforced=data.enforced?true:false
         opt.required=data.required?true:false
+        opt.isDate=data.isDate?true:false
+        if(opt.isDate){
+            opt.dateFormat=data.dateFormat
+        }
         if(data.description){
             opt.description=data.description
         }
@@ -257,7 +270,7 @@ public class Option implements Comparable{
      */
     public Option createClone(){
         Option opt = new Option()
-        ['name','description','defaultValue','defaultStoragePath','sortIndex','enforced','required','values','valuesList','valuesUrl','valuesUrlLong','regex','multivalued','delimiter','secureInput','secureExposed'].each{k->
+        ['name','description','defaultValue','defaultStoragePath','sortIndex','enforced','required', 'isDate','dateFormat', 'values','valuesList','valuesUrl','valuesUrlLong','regex','multivalued','delimiter','secureInput','secureExposed'].each{k->
             opt[k]=this[k]
         }
         if(!opt.valuesList && values){
@@ -275,6 +288,8 @@ public class Option implements Comparable{
         ", storagePath='" + defaultStoragePath + '\'' +
         ", enforced=" + enforced +
         ", required=" + required +
+        ", isDate=" + isDate +
+        ", dateFormat=" + dateFormat +
         ", values=" + values +
         ", valuesUrl=" + getRealValuesUrl() +
         ", regex='" + regex + '\'' +

@@ -1,17 +1,17 @@
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 /*
@@ -235,13 +235,18 @@ public class DataContextUtils {
     }
 
     /**
-     * Merge one context onto another by adding or replacing values.
+     * Merge one context onto another by adding or replacing values in a new map
+     *
      * @param targetContext the target of the merge
-     *                @param newContext context to merge
-     * @return merged data
+     * @param newContext    context to merge
+     *
+     * @return merged data in a new map
      */
-    public static Map<String, Map<String, String>> merge(final Map<String, Map<String, String>> targetContext,
-                                                         final Map<String, Map<String, String>> newContext) {
+    public static Map<String, Map<String, String>> merge(
+            final Map<String, Map<String, String>> targetContext,
+            final Map<String, Map<String, String>> newContext
+    )
+    {
 
         final HashMap<String, Map<String, String>> result = deepCopy(targetContext);
         for (final Map.Entry<String, Map<String, String>> entry : newContext.entrySet()) {
@@ -390,91 +395,6 @@ public class DataContextUtils {
 
 
     /**
-     * Copies the source file to a temp file, replacing the @key.X@ tokens with the values from the
-     * data context
-     *
-     * @param sourceFile  source file
-     * @param dataContext input data context
-     * @param framework   the framework
-     * @param style       line ending style
-     *
-     * @return the token replaced temp file, or null if an error occurs.
-     * @throws java.io.IOException on io error
-     */
-    public static File replaceTokensInFile(
-            final File sourceFile,
-            final Map<String, Map<String, String>> dataContext,
-            final Framework framework,
-            final ScriptfileUtils.LineEndingStyle style
-    ) throws IOException
-    {
-        return replaceTokensInFile(sourceFile, dataContext, framework, style, null);
-    }
-
-    /**
-     * Copies the source file to a destination file, replacing the @key.X@ tokens with the values
-     * from the data context
-     *
-     * @param sourceFile  source file
-     * @param dataContext input data context
-     * @param framework   the framework
-     * @param style       line ending style
-     * @param destination destination file, or null to create a new temp file
-     *
-     * @return the token replaced file, or null if an error occurs.
-     * @throws java.io.IOException on io error
-     */
-    public static File replaceTokensInFile(
-            final File sourceFile,
-            final Map<String, Map<String, String>> dataContext,
-            final Framework framework,
-            final ScriptfileUtils.LineEndingStyle style,
-            final File destination
-    ) throws IOException
-    {
-        //use ReplaceTokens to replace tokens within the file
-        final Map<String, String> toks = flattenDataContext(dataContext);
-        final ReplaceTokenReader replaceTokens = new ReplaceTokenReader(
-                new InputStreamReader(
-                        new FileInputStream
-                                (sourceFile)
-                ), toks, true, '@', '@'
-        );
-        final File temp;
-        if (null != destination) {
-            ScriptfileUtils.writeScriptFile(null, null, replaceTokens, style, destination);
-            temp = destination;
-        } else {
-            temp = ScriptfileUtils.writeScriptTempfile(framework, replaceTokens, style);
-        }
-        ScriptfileUtils.setExecutePermissions(temp);
-        return temp;
-    }
-
-    /**
-     * Copies the source file to a temp file, replacing the @key.X@ tokens with the values from the
-     * data context
-     *
-     * @param script      source file path
-     * @param dataContext input data context
-     * @param framework   the framework
-     * @param style       line ending style
-     *
-     * @return the token replaced temp file, or null if an error occurs.
-     * @throws java.io.IOException on io error
-     */
-    public static File replaceTokensInScript(
-            final String script,
-            final Map<String, Map<String, String>> dataContext,
-            final Framework framework,
-            final ScriptfileUtils.LineEndingStyle style
-    )
-            throws IOException
-    {
-        return replaceTokensInScript(script, dataContext, framework, style, null);
-    }
-
-    /**
      * Copies the source file to a file, replacing the @key.X@ tokens with the values from the data
      * context
      *
@@ -499,9 +419,6 @@ public class DataContextUtils {
         if (null == script) {
             throw new NullPointerException("script cannot be null");
         }
-        if (null == framework) {
-            throw new NullPointerException("framework cannot be null");
-        }
         //use ReplaceTokens to replace tokens within the content
         final Reader read = new StringReader(script);
         final Map<String, String> toks = flattenDataContext(dataContext);
@@ -511,32 +428,15 @@ public class DataContextUtils {
             ScriptfileUtils.writeScriptFile(null, null, replaceTokens, style, destination);
             temp = destination;
         } else {
+            if (null == framework) {
+                throw new NullPointerException("framework cannot be null");
+            }
             temp = ScriptfileUtils.writeScriptTempfile(framework, replaceTokens, style);
         }
         ScriptfileUtils.setExecutePermissions(temp);
         return temp;
     }
-    /**
-     * Copies the source stream to a temp file, replacing the @key.X@ tokens with the values from the data context
-     *
-     * @param stream  source stream
-     * @param dataContext input data context
-     * @param framework   the framework
-     * @param style script file line ending style to use
-     *
-     * @return the token replaced temp file, or null if an error occurs.
-     * @throws java.io.IOException on io error
-     */
-    public static File replaceTokensInStream(
-            final InputStream stream,
-            final Map<String, Map<String, String>> dataContext,
-            final Framework framework,
-            final ScriptfileUtils.LineEndingStyle style
-    )
-            throws IOException
-    {
-        return replaceTokensInStream(stream, dataContext, framework, style, null);
-    }
+
 
     /**
      * Copies the source stream to a temp file or specific destination, replacing the @key.X@ tokens

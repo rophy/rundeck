@@ -1,9 +1,26 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck
 
 import com.dtolabs.rundeck.app.support.ExecutionContext
 import com.dtolabs.rundeck.core.common.FrameworkResource
 
 class ScheduledExecution extends ExecutionContext {
+    static final String RUNBOOK_MARKER='---'
     Long id
     SortedSet<Option> options
     static hasMany = [executions:Execution,options:Option,notifications:Notification]
@@ -116,6 +133,7 @@ class ScheduledExecution extends ExecutionContext {
         nodesSelectedByDefault(nullable: true)
         scheduleEnabled(nullable: true)
         executionEnabled(nullable: true)
+        nodeFilterEditable(nullable: true)
         logOutputThreshold(maxSize: 256, blank:true, nullable: true)
         logOutputThresholdAction(maxSize: 256, blank:true, nullable: true,inList: ['halt','truncate'])
         logOutputThresholdStatus(maxSize: 256, blank:true, nullable: true)
@@ -149,6 +167,23 @@ class ScheduledExecution extends ExecutionContext {
         retry(type: 'text')
     }
 
+    static namedQueries = {
+		isScheduled {
+			eq 'scheduled', true
+		}
+		withServerUUID { uuid ->
+			eq 'serverNodeUUID', uuid
+		}
+		withoutServerUUID { uuid ->
+			ne 'serverNodeUUID', uuid
+		}
+		withAdHocScheduledExecutions {
+			executions {
+				eq 'status', 'scheduled'
+			}
+		}
+    }
+
 
     public static final daysofweeklist = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
     public static final monthsofyearlist = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -160,6 +195,7 @@ class ScheduledExecution extends ExecutionContext {
 
         map.scheduleEnabled = hasScheduleEnabled()
         map.executionEnabled = hasExecutionEnabled()
+        map.nodeFilterEditable = hasNodeFilterEditable()
 
         if(groupPath){
             map.group=groupPath
@@ -259,10 +295,11 @@ class ScheduledExecution extends ExecutionContext {
         if(data.orchestrator){
             se.orchestrator=Orchestrator.fromMap(data.orchestrator);
         }
-
+        
         se.scheduleEnabled = data['scheduleEnabled'] == null || data['scheduleEnabled']
         se.executionEnabled = data['executionEnabled'] == null || data['executionEnabled']
-
+        se.nodeFilterEditable = data['nodeFilterEditable'] == null || data['nodeFilterEditable']
+        
         se.loglevel=data.loglevel?data.loglevel:'INFO'
 
         if(data.loglimit){
@@ -492,6 +529,10 @@ class ScheduledExecution extends ExecutionContext {
 
     def boolean hasExecutionEnabled() {
         return (null == executionEnabled || executionEnabled)
+    }
+
+    def boolean hasNodeFilterEditable() {
+        return (null == nodeFilterEditable || nodeFilterEditable)
     }
 
     def String generateJobScheduledName(){

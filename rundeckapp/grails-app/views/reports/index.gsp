@@ -3,7 +3,23 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
     <meta name="layout" content="base"/>
     <meta name="tabpage" content="events"/>
-    <g:ifServletContextAttribute attribute="RSS_ENABLED" value="true">
+    %{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
+<g:ifServletContextAttribute attribute="RSS_ENABLED" value="true">
     <link rel="alternate" type="application/rss+xml" title="RSS 2.0" href="${createLink(controller:"feed",action:"index",params:paginateParams?paginateParams:[:])}"/>
     </g:ifServletContextAttribute>
     <title><g:message code="gui.menu.Events"/> - <g:enc>${params.project ?: request.project}</g:enc></title>
@@ -57,7 +73,7 @@
             loadNowRunning();
         }
         function loadNowRunning(){
-            jQuery('#nowrunning').load(_genUrl(links.nowrunning,jQuery.extend(eventsparams,{offset:nroffset})),
+            jQuery('#nowrunning').load(_genUrl(links.nowrunning,jQuery.extend({},eventsparams,{offset:nroffset})),
                 function(response, status, xhr){
                     if ( status == "error" ) {
                         showError("AJAX error: Now Running [" + links.nowrunning + "]: " + xhr.status + " "+ xhr.statusText);
@@ -73,8 +89,8 @@
          *
          */
         var histControl = new HistoryControl('histcontent',{xcompact:true,nofilters:true});
-        function loadHistory(){
-            histControl.loadHistory( eventsparams );
+        function loadHistory(params){
+            histControl.loadHistory( params|| eventsparams );
         }
         function setAutoLoad(auto){
             autoLoad=auto;
@@ -169,15 +185,17 @@
                 var e = $('evtsholder').down('.paginate');
                 if(e){
                     var pagefunc=function(e,params){
-                        Object.extend(eventsparams,params);
-                        loadHistory();
+                        loadHistory(jQuery.extend({},eventsparams,params));
                         history.pushState(params, pageTitle, e.href);
                     };
                     paginate(e,data.offset,data.total,data.max,{
                         baseUrl:links.baseUrl,
                         ulCss:'pagination pagination-sm pagination-embed',
-                        'paginate.prev':"${g.message(code: 'default.paginate.prev',default:'«')}",
-                        'paginate.next':"${g.message(code: 'default.paginate.next',default:'»')}",
+                        'paginate.prev':"${g.message(code: 'default.paginate.prev',default:'-')}",
+                        'paginate.next':"${g.message(code: 'default.paginate.next',default:'+')}",
+                        'paginate.rew':"${g.message(code: 'default.paginate.rew',default:'«')}",
+                        'paginate.ff':"${g.message(code: 'default.paginate.ff',default:'»')}",
+                        maxsteps:20,
                         prevBehavior:pagefunc,
                         stepBehavior:pagefunc,
                         nextBehavior:pagefunc

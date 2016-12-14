@@ -1,9 +1,27 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dtolabs.rundeck.app.internal.logging
 
 import com.dtolabs.rundeck.core.execution.Contextual
 import com.dtolabs.rundeck.core.logging.LogLevel
 import com.dtolabs.rundeck.core.logging.StreamingLogWriter
 import com.dtolabs.rundeck.core.utils.ThreadBoundOutputStream
+
+import java.nio.charset.Charset
 
 /**
  * Thread local buffered log output
@@ -16,6 +34,7 @@ class ThreadBoundLogOutputStream extends OutputStream {
     Contextual contextual
     ThreadLocal<LogEventBuffer> buffer = new ThreadLocal<LogEventBuffer>()
     InheritableThreadLocal<LogEventBufferManager> manager = new InheritableThreadLocal<LogEventBufferManager>()
+    InheritableThreadLocal<Charset> charset = new InheritableThreadLocal<Charset>()
 
     /**
      * Create a new thread local buffered stream
@@ -23,10 +42,21 @@ class ThreadBoundLogOutputStream extends OutputStream {
      * @param level loglevel
      * @param contextual source of context
      */
-    ThreadBoundLogOutputStream(StreamingLogWriter logger, LogLevel level, Contextual contextual) {
+    ThreadBoundLogOutputStream(StreamingLogWriter logger, LogLevel level, Contextual contextual, Charset charset=null) {
         this.logger = logger
         this.level = level
         this.contextual = contextual
+        this.charset.set(charset)
+    }
+    /**
+     * Set the charset to use
+     * @param charset new charset
+     * @return previous charset
+     */
+    public Charset setCharset(Charset charset) {
+        Charset prev=this.charset.get()
+        this.charset.set(charset)
+        return prev
     }
 
     /**
@@ -34,7 +64,7 @@ class ThreadBoundLogOutputStream extends OutputStream {
      * @return manager
      */
     public LogEventBufferManager installManager() {
-        def manager = LogEventBufferManager.createManager()
+        def manager = LogEventBufferManager.createManager(charset.get())
         this.manager.set(manager)
         return manager
     }

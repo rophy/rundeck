@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import com.dtolabs.rundeck.core.authorization.AuthContext
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
 import com.dtolabs.rundeck.core.common.INodeSet
@@ -10,10 +26,10 @@ import com.dtolabs.rundeck.core.execution.workflow.steps.node.impl.ExecCommandEx
 import com.dtolabs.rundeck.core.execution.workflow.steps.node.impl.ScriptFileCommandExecutionItem
 import com.dtolabs.rundeck.core.execution.workflow.steps.node.impl.ScriptURLCommandExecutionItem
 import com.dtolabs.rundeck.core.utils.NodeSet
+import grails.test.GrailsMock
 import grails.test.mixin.Mock
 import grails.test.mixin.TestFor
 import grails.test.mixin.web.ControllerUnitTestMixin
-import groovy.mock.interceptor.MockFor
 import org.codehaus.groovy.grails.plugins.databinding.DataBindingGrailsPlugin
 import org.grails.plugins.metricsweb.MetricService
 import org.junit.Before
@@ -72,7 +88,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService = fsvc
         try{
-            svc.createExecution(se,createAuthContext("user1"))
+            svc.createExecution(se,createAuthContext("user1"),null)
             fail("should fail")
         }catch(ExecutionServiceException ex){
             assertTrue(ex.message.contains('is currently being executed'))
@@ -107,7 +123,7 @@ class ExecutionServiceTests  {
         ExecutionService svc = new ExecutionService()
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService = fsvc
-        def execution=svc.createExecution(se,createAuthContext("user1"))
+        def execution=svc.createExecution(se,createAuthContext("user1"),null)
         assertNotNull(execution)
     }
     void testCreateExecutionSimple(){
@@ -127,7 +143,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e2=svc.createExecution(se,createAuthContext("user1"))
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null)
 
         assertNotNull(e2)
         assertEquals('-a b -c d', e2.argString)
@@ -135,6 +151,67 @@ class ExecutionServiceTests  {
         assertNotNull(e2.dateStarted)
         assertNull(e2.dateCompleted)
         assertEquals('user1', e2.user)
+        assertEquals('scheduled', e2.executionType)
+        def execs = se.executions
+        assertNotNull(execs)
+        assertTrue(execs.contains(e2))
+    }
+    void testCreateExecutionSimpleUserExecutionType(){
+
+        ScheduledExecution se = new ScheduledExecution(
+            jobName: 'blue',
+            project: 'AProject',
+            groupPath: 'some/where',
+            description: 'a job',
+            argString: '-a b -c d',
+            workflow: new Workflow(keepgoing: true, commands: [new CommandExec([adhocRemoteString: 'test buddy', argString: '-delay 12 -monkey cheese -particle'])]),
+        )
+        se.save()
+
+
+        ExecutionService svc = new ExecutionService()
+        FrameworkService fsvc = new FrameworkService()
+        svc.frameworkService=fsvc
+
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,['executionType':'user'])
+
+        assertNotNull(e2)
+        assertEquals('-a b -c d', e2.argString)
+        assertEquals(se, e2.scheduledExecution)
+        assertNotNull(e2.dateStarted)
+        assertNull(e2.dateCompleted)
+        assertEquals('user1', e2.user)
+        assertEquals('user', e2.executionType)
+        def execs = se.executions
+        assertNotNull(execs)
+        assertTrue(execs.contains(e2))
+    }
+    void testCreateExecutionScheduledUserExecutionType(){
+
+        ScheduledExecution se = new ScheduledExecution(
+            jobName: 'blue',
+            project: 'AProject',
+            groupPath: 'some/where',
+            description: 'a job',
+            argString: '-a b -c d',
+            workflow: new Workflow(keepgoing: true, commands: [new CommandExec([adhocRemoteString: 'test buddy', argString: '-delay 12 -monkey cheese -particle'])]),
+        )
+        se.save()
+
+
+        ExecutionService svc = new ExecutionService()
+        FrameworkService fsvc = new FrameworkService()
+        svc.frameworkService=fsvc
+
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,['executionType':'user-scheduled'])
+
+        assertNotNull(e2)
+        assertEquals('-a b -c d', e2.argString)
+        assertEquals(se, e2.scheduledExecution)
+        assertNotNull(e2.dateStarted)
+        assertNull(e2.dateCompleted)
+        assertEquals('user1', e2.user)
+        assertEquals('user-scheduled', e2.executionType)
         def execs = se.executions
         assertNotNull(execs)
         assertTrue(execs.contains(e2))
@@ -157,7 +234,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e2=svc.createExecution(se,createAuthContext("user1"),['extra.option.test':'12'])
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,['extra.option.test':'12'])
 
         assertNotNull(e2)
         assertEquals('-a b -c d', e2.argString)
@@ -223,7 +300,7 @@ class ExecutionServiceTests  {
         svc.frameworkService = fsvc
 
 
-        Execution e2 = svc.createExecution(se,createAuthContext("user1"), [('option.test'): testOptionValue])
+        Execution e2 = svc.createExecution(se,createAuthContext("user1"),null, [('option.test'): testOptionValue])
 
         assertNotNull(e2)
         assertEquals(argString, e2.argString)
@@ -261,7 +338,7 @@ class ExecutionServiceTests  {
 
 
         try{
-            Execution e2 = svc.createExecution(se,createAuthContext("user1"), [('option.test'): testOptionValue])
+            Execution e2 = svc.createExecution(se,createAuthContext("user1"),null, [('option.test'): testOptionValue])
             fail("expected exception")
         }catch (ExecutionServiceException e){
             assertEquals(exceptionMessage,e.message)
@@ -269,7 +346,7 @@ class ExecutionServiceTests  {
 
     }
 
-    void testCreateExecutionOverrideNodefilter(){
+    void testCreateExecutionOverrideNodefilter(){   
 
         ScheduledExecution se = new ScheduledExecution(
             jobName: 'blue',
@@ -287,7 +364,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e2=svc.createExecution(se,createAuthContext("user1"),[('_replaceNodeFilters'):"true",filter:'name: monkey'])
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,[('_replaceNodeFilters'):"true",filter:'name: monkey'])
 
         assertNotNull(e2)
         assertEquals('name: monkey', e2.filter)
@@ -318,7 +395,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e2=svc.createExecution(se,createAuthContext("user1"),[('_replaceNodeFilters'):"true",nodeIncludeName: 'monkey'])
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,[('_replaceNodeFilters'):"true",nodeIncludeName: 'monkey'])
 
         assertNotNull(e2)
         assertEquals('name: monkey', e2.filter)
@@ -349,7 +426,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e2=svc.createExecution(se,createAuthContext("user1"),[('_replaceNodeFilters'):"true",nodeIncludeName: ['monkey','banana']])
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,[('_replaceNodeFilters'):"true",nodeIncludeName: ['monkey','banana']])
 
         assertNotNull(e2)
         assertEquals('name: monkey,banana', e2.filter)
@@ -424,7 +501,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService=fsvc
 
-        Execution e=svc.createExecution(se,createAuthContext("user1"))
+        Execution e=svc.createExecution(se,createAuthContext("user1"),null)
 
         assertNotNull(e)
         assertEquals('-a b -c d',e.argString)
@@ -444,7 +521,7 @@ class ExecutionServiceTests  {
         svc.frameworkService=fsvc
 
             assertNull(se.executions)
-            Execution e=svc.createExecution(se,createAuthContext("user1"),[argString:'-test1 asdf -test2 val2b -test4 asdf4'])
+            Execution e=svc.createExecution(se,createAuthContext("user1"),null,[argString:'-test1 asdf -test2 val2b -test4 asdf4'])
 
             assertNotNull(e)
             assertEquals("secure option value should not be stored",'-test1 asdf -test2 val2b -test3 val3',e.argString)
@@ -463,7 +540,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService = fsvc
         assertNull(se.executions)
-        Execution e=svc.createExecution(se,createAuthContext("user1"),[argString:'-test2 val2b -test4 asdf4'])
+        Execution e=svc.createExecution(se,createAuthContext("user1"),null,[argString:'-test2 val2b -test4 asdf4'])
 
         assertNotNull(e)
         assertEquals("default value should be used",'-test1 val1 -test2 val2b -test3 val3',e.argString)
@@ -482,7 +559,7 @@ class ExecutionServiceTests  {
         FrameworkService fsvc = new FrameworkService()
         svc.frameworkService = fsvc
         assertNull(se.executions)
-        Execution e=svc.createExecution(se,createAuthContext("user1"),[argString:'-test2 val2b -test3 monkey3'])
+        Execution e=svc.createExecution(se,createAuthContext("user1"),null,[argString:'-test2 val2b -test3 monkey3'])
 
         assertNotNull(e)
         assertEquals('-test1 val1 -test2 val2b -test3 monkey3',e.argString)
@@ -506,7 +583,7 @@ class ExecutionServiceTests  {
         svc.messageSource = ms.createMock()
             //enforced value failure on test2
             try {
-                Execution e = svc.createExecution(se,createAuthContext("user1"), [argString: '-test2 val2D -test3 monkey4'])
+                Execution e = svc.createExecution(se,createAuthContext("user1"),null, [argString: '-test2 val2D -test3 monkey4'])
                 fail("shouldn't succeed")
             } catch (ExecutionServiceException e) {
                 assertTrue(e.message,e.message.contains("domain.Option.validation.allowed.invalid"))
@@ -525,7 +602,7 @@ class ExecutionServiceTests  {
         svc.messageSource = ms.createMock()
             //regex failure on test3
             try {
-                Execution e = svc.createExecution(se,createAuthContext("user1"), [argString: '-test2 val2b -test3 monkey4'])
+                Execution e = svc.createExecution(se,createAuthContext("user1"),null, [argString: '-test2 val2b -test3 monkey4'])
                 fail("shouldn't succeed")
             } catch (ExecutionServiceException e) {
                 assertTrue(e.message,e.message.contains("domain.Option.validation.regex.invalid"))
@@ -640,6 +717,9 @@ class ExecutionServiceTests  {
         fcontrol.demand.filterAuthorizedNodes(1..1) {  project, actions, unfiltered, authContext ->
             new NodeSetImpl()
         }
+        fcontrol.demand.getProjectGlobals(1..1) {  project->
+            [:]
+        }
         service.frameworkService=fcontrol.createMock()
         service.storageService=mockWith(StorageService){
             storageTreeWithContext{ctx->
@@ -672,17 +752,7 @@ class ExecutionServiceTests  {
      */
     void testCreateContextDatacontext() {
 
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -723,6 +793,9 @@ class ExecutionServiceTests  {
         fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
             new NodeSetImpl()
         }
+        fcontrol.demand.getProjectGlobals(1..1) {  project->
+            [:]
+        }
         service.frameworkService = fcontrol.createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
@@ -756,17 +829,7 @@ class ExecutionServiceTests  {
      */
     void testCreateContextJobData() {
 
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -797,17 +860,7 @@ class ExecutionServiceTests  {
      */
     void testCreateContextJobDataEmptyNodeset() {
 
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -834,17 +887,7 @@ class ExecutionServiceTests  {
      */
     void testCreateContextJobDataNodeInclude() {
 
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -870,6 +913,23 @@ class ExecutionServiceTests  {
             assertEquals("testnode", val.nodeSelector.include.name)
     }
 
+    private GrailsMock makeFrameworkMock(Map argsMap) {
+        def fcontrol = mockFor(FrameworkService, true)
+        fcontrol.demand.parseOptsFromString(1..1) { argString ->
+            argsMap
+        }
+        fcontrol.demand.filterNodeSet(1..1) { fwk, sel, proj ->
+            new NodeSetImpl()
+        }
+        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
+            new NodeSetImpl()
+        }
+        fcontrol.demand.getProjectGlobals(1..1) { project ->
+            [:]
+        }
+        fcontrol
+    }
+
     /**
      * Test createContext method
      */
@@ -884,6 +944,9 @@ class ExecutionServiceTests  {
         }
         fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
             new NodeSetImpl()
+        }
+        fcontrol.demand.getProjectGlobals(1..1) {  project->
+            [:]
         }
         service.frameworkService = fcontrol.createMock()
         service.storageService = mockWith(StorageService) {
@@ -925,6 +988,9 @@ class ExecutionServiceTests  {
         fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
             new NodeSetImpl()
         }
+        fcontrol.demand.getProjectGlobals(1..1) {  project->
+            [:]
+        }
         service.frameworkService = fcontrol.createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
@@ -958,17 +1024,7 @@ class ExecutionServiceTests  {
      * Test node keepgoing, threadcount filter values
      */
     void testCreateContextNodeDispatchOptions() {
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args',test3:'something']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args',test3:'something']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -1016,17 +1072,7 @@ class ExecutionServiceTests  {
      * Test use of ${option.x} and ${job.y} parameter expansion in node filter tag and name filters.
      */
     void testCreateContextParameterizedFilters() {
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args', test3: 'something']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args',test3:'something']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -1086,17 +1132,7 @@ class ExecutionServiceTests  {
      * Test use of ${option.x} and ${job.y} parameter expansion in node filter tag and name filters.
      */
     void testCreateContextParameterizedAttributeFilters() {
-        def fcontrol = mockFor(FrameworkService, true)
-        fcontrol.demand.parseOptsFromString(1..1) {argString ->
-            [test: 'args', test3: 'something']
-        }
-        fcontrol.demand.filterNodeSet(1..1) {fwk, sel, proj ->
-            new NodeSetImpl()
-        }
-        fcontrol.demand.filterAuthorizedNodes(1..1) { project, actions, unfiltered, authContext ->
-            new NodeSetImpl()
-        }
-        service.frameworkService = fcontrol.createMock()
+        service.frameworkService = makeFrameworkMock([test: 'args',test3:'something']).createMock()
         service.storageService = mockWith(StorageService) {
             storageTreeWithContext { ctx ->
                 null
@@ -1132,6 +1168,9 @@ class ExecutionServiceTests  {
     void testCreateContextParameterizedWholeFilter() {
 
         service.frameworkService = mockWith(FrameworkService){
+            getProjectGlobals(1..1) {  project->
+                [:]
+            }
             filterNodeSet(1..1) { fwk, sel, proj ->
                 new NodeSetImpl()
             }
@@ -1168,168 +1207,6 @@ class ExecutionServiceTests  {
         assertNull(val.nodeSelector.exclude.toMap().environment)
     }
 
-    void testItemForWFCmdItem_command(){
-        def testService = service
-            //exec
-            CommandExec ce = new CommandExec(adhocRemoteString: 'exec command')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ExecCommandExecutionItem)
-            ExecCommandExecutionItem item=(ExecCommandExecutionItem) res
-            assertEquals(['exec','command'],item.command as List)
-        }
-
-    void testItemForWFCmdItem_script() {
-        def testService = service
-            //adhoc local string
-            CommandExec ce = new CommandExec(adhocLocalString: 'local script')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ScriptFileCommandExecutionItem)
-            ScriptFileCommandExecutionItem item=(ScriptFileCommandExecutionItem) res
-            assertEquals('local script',item.script)
-            assertNull(item.scriptAsStream)
-            assertNull(item.serverScriptFilePath)
-            assertNotNull(item.args)
-            assertEquals(0,item.args.length)
-        }
-
-    void testItemForWFCmdItem_script_fileextension() {
-        def testService = service
-        //adhoc local string
-        CommandExec ce = new CommandExec(adhocLocalString: 'local script',fileExtension: 'abc')
-        def res = testService.itemForWFCmdItem(ce)
-        assertNotNull(res)
-        assertTrue(res instanceof StepExecutionItem)
-        assertTrue(res instanceof ScriptFileCommandExecutionItem)
-        ScriptFileCommandExecutionItem item=(ScriptFileCommandExecutionItem) res
-        assertEquals('local script',item.script)
-        assertNull(item.scriptAsStream)
-        assertNull(item.serverScriptFilePath)
-        assertNotNull(item.args)
-        assertEquals(0,item.args.length)
-        assertEquals('abc',item.fileExtension)
-    }
-
-    void testItemForWFCmdItem_scriptArgs() {
-        def testService = service
-            //adhoc local string, args
-            CommandExec ce = new CommandExec(adhocLocalString: 'local script',argString: 'some args')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ScriptFileCommandExecutionItem)
-            ScriptFileCommandExecutionItem item=(ScriptFileCommandExecutionItem) res
-            assertEquals('local script',item.script)
-            assertNull(item.scriptAsStream)
-            assertNull(item.serverScriptFilePath)
-            assertNotNull(item.args)
-            assertEquals(['some', 'args'], item.args as List)
-        }
-
-    void testItemForWFCmdItem_scriptfile() {
-        def testService = service
-        //adhoc file path
-        CommandExec ce = new CommandExec(adhocFilepath: '/some/path', argString: 'some args')
-        def res = testService.itemForWFCmdItem(ce)
-        assertNotNull(res)
-        assertTrue(res instanceof StepExecutionItem)
-        assertTrue(res instanceof ScriptFileCommandExecutionItem)
-        ScriptFileCommandExecutionItem item = (ScriptFileCommandExecutionItem) res
-        assertEquals('/some/path', item.serverScriptFilePath)
-        assertNull(item.scriptAsStream)
-        assertNull(item.script)
-        assertNotNull(item.args)
-        assertEquals(['some', 'args'], item.args as List)
-    }
-    void testItemForWFCmdItem_scriptfile_fileextension() {
-        def testService = service
-        //adhoc file path
-        CommandExec ce = new CommandExec(adhocFilepath: '/some/path', argString: 'some args',fileExtension: 'xyz')
-        def res = testService.itemForWFCmdItem(ce)
-        assertNotNull(res)
-        assertTrue(res instanceof StepExecutionItem)
-        assertTrue(res instanceof ScriptFileCommandExecutionItem)
-        ScriptFileCommandExecutionItem item = (ScriptFileCommandExecutionItem) res
-        assertEquals('/some/path', item.serverScriptFilePath)
-        assertNull(item.scriptAsStream)
-        assertNull(item.script)
-        assertNotNull(item.args)
-        assertEquals(['some', 'args'], item.args as List)
-        assertEquals('xyz', item.fileExtension)
-    }
-
-    void testItemForWFCmdItem_scripturl() {
-        def testService = service
-        //http url script path
-        CommandExec ce = new CommandExec(adhocFilepath: 'http://example.com/script', argString: 'some args')
-        def res = testService.itemForWFCmdItem(ce)
-        assertNotNull(res)
-        assertTrue(res instanceof StepExecutionItem)
-        assertTrue(res instanceof ScriptURLCommandExecutionItem)
-        ScriptURLCommandExecutionItem item = (ScriptURLCommandExecutionItem) res
-        assertEquals('http://example.com/script', item.URLString)
-        assertNotNull(item.args)
-        assertEquals(['some', 'args'], item.args as List)
-    }
-    void testItemForWFCmdItem_scripturl_fileextension() {
-        def testService = service
-        //http url script path
-        CommandExec ce = new CommandExec(adhocFilepath: 'http://example.com/script', argString: 'some args',fileExtension: 'mdd')
-        def res = testService.itemForWFCmdItem(ce)
-        assertNotNull(res)
-        assertTrue(res instanceof StepExecutionItem)
-        assertTrue(res instanceof ScriptURLCommandExecutionItem)
-        ScriptURLCommandExecutionItem item = (ScriptURLCommandExecutionItem) res
-        assertEquals('http://example.com/script', item.URLString)
-        assertNotNull(item.args)
-        assertEquals(['some', 'args'], item.args as List)
-        assertEquals('mdd', item.fileExtension)
-    }
-
-    void testItemForWFCmdItem_scripturl_https() {
-        def testService = service
-            //https url script path
-            CommandExec ce = new CommandExec(adhocFilepath: 'https://example.com/script', argString: 'some args')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ScriptURLCommandExecutionItem)
-            ScriptURLCommandExecutionItem item = (ScriptURLCommandExecutionItem) res
-            assertEquals('https://example.com/script', item.URLString)
-            assertNotNull(item.args)
-            assertEquals(['some', 'args'], item.args as List)
-        }
-
-    void testItemForWFCmdItem_scripturl_file() {
-        def testService = service
-            //file url script path
-            CommandExec ce = new CommandExec(adhocFilepath: 'file:/some/script')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ScriptURLCommandExecutionItem)
-            ScriptURLCommandExecutionItem item = (ScriptURLCommandExecutionItem) res
-            assertEquals('file:/some/script', item.URLString)
-            assertNotNull(item.args)
-            assertEquals(0, item.args.length)
-        }
-
-    void testItemForWFCmdItem_scripturl_file_args() {
-        def testService = service
-            //file url script path
-            CommandExec ce = new CommandExec(adhocFilepath: 'file:/some/script', argString: 'some args')
-            def res = testService.itemForWFCmdItem(ce)
-            assertNotNull(res)
-            assertTrue(res instanceof StepExecutionItem)
-            assertTrue(res instanceof ScriptURLCommandExecutionItem)
-            ScriptURLCommandExecutionItem item = (ScriptURLCommandExecutionItem) res
-            assertEquals('file:/some/script', item.URLString)
-            assertNotNull(item.args)
-            assertEquals(['some', 'args'], item.args as List)
-    }
 
     private ExecutionService setupCleanupService(){
         def testService = new ExecutionService()
@@ -1433,8 +1310,30 @@ class ExecutionServiceTests  {
         exec2.refresh()
         assertNotNull(exec2.dateCompleted)
         assertEquals("false", exec2.status)
-
     }
+
+    void testCleanupRunningJobsLeavesScheduled() {
+        def testService = setupCleanupService()
+        def uuid = UUID.randomUUID().toString()
+
+        def wf1 = new Workflow(commands: [new CommandExec(adhocRemoteString: "test")]).save()
+        Execution exec1 = new Execution(argString: "-test args", user: "testuser", project: "testproj", loglevel: 'WARN', doNodedispatch: false,
+                dateStarted: new Date().plus(1),
+                dateCompleted: null,
+                workflow: wf1,
+				status: 'scheduled'
+        )
+        assertNotNull(exec1.save())
+
+        assertNull(exec1.dateCompleted)
+        assertEquals(ExecutionService.EXECUTION_SCHEDULED, exec1.status)
+
+        testService.cleanupRunningJobs(uuid)
+        exec1.refresh()
+        assertNull(exec1.dateCompleted)
+        assertEquals(ExecutionService.EXECUTION_SCHEDULED, exec1.status)
+    }
+
     /**
      * null node filter
      */
@@ -1445,7 +1344,7 @@ class ExecutionServiceTests  {
                                           .threadCount(1)
                                           .keepgoing(false)
                                           .build()
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, null, null, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, null, null, null, null, null)
         assertEquals(['x','y'],newctx.nodes.nodeNames as List)
         assertEquals(false,newctx.keepgoing)
         assertEquals(1,newctx.threadCount)
@@ -1460,7 +1359,7 @@ class ExecutionServiceTests  {
                                           .threadCount(1)
                                           .keepgoing(false)
                                           .build()
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, 2, null, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, 2, null, null, null, null)
         assertEquals(['x','y'],newctx.nodes.nodeNames as List)
         assertEquals(false,newctx.keepgoing)
         assertEquals(1,newctx.threadCount)
@@ -1475,7 +1374,7 @@ class ExecutionServiceTests  {
                                           .threadCount(1)
                                           .keepgoing(false)
                                           .build()
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, null, true, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(null, context, null, null, true, null, null, null)
         assertEquals(['x','y'],newctx.nodes.nodeNames as List)
         assertEquals(false,newctx.keepgoing)
         assertEquals(1,newctx.threadCount)
@@ -1500,7 +1399,7 @@ class ExecutionServiceTests  {
             }
         }
 
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, 'z p', null, null, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(new ExecutionContextImpl() , context, 'z p', null, null, null, null, null)
         assertEquals(['z','p'] as Set,newctx.nodes.nodeNames as Set)
         assertEquals(false,newctx.keepgoing)
         assertEquals(1,newctx.threadCount)
@@ -1525,7 +1424,7 @@ class ExecutionServiceTests  {
             }
         }
 
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, 'z p', 2, null, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(new ExecutionContextImpl(), context, 'z p', 2, null, null, null, null)
         assertEquals(['z','p'] as Set,newctx.nodes.nodeNames as Set)
         assertEquals(false,newctx.keepgoing)
         assertEquals(2,newctx.threadCount)
@@ -1550,7 +1449,7 @@ class ExecutionServiceTests  {
             }
         }
 
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, 'z p', 2, true, null, null)
+        def newctx=service.overrideJobReferenceNodeFilter(new ExecutionContextImpl(), context, 'z p', 2, true, null, null, false)
         assertEquals(['z','p'] as Set,newctx.nodes.nodeNames as Set)
         assertEquals(true,newctx.keepgoing)
         assertEquals(2,newctx.threadCount)
@@ -1576,7 +1475,7 @@ class ExecutionServiceTests  {
         }
         assertEquals(null, context.nodeRankAttribute)
         assertEquals(true, context.nodeRankOrderAscending)
-        def newctx=service.overrideJobReferenceNodeFilter(null, context, 'z p', 2, true, 'rank', false)
+        def newctx=service.overrideJobReferenceNodeFilter(new ExecutionContextImpl(), context, 'z p', 2, true, 'rank', false, null)
         assertEquals(['z','p'] as Set,newctx.nodes.nodeNames as Set)
         assertEquals(true,newctx.keepgoing)
         assertEquals(2,newctx.threadCount)
@@ -1603,14 +1502,97 @@ class ExecutionServiceTests  {
                 makeNodeSet(['z','p'])
             }
         }
+        def origContext = ExecutionContextImpl.builder().
+                dataContext([option:[test1:'blah']]).build()
         assertEquals(null, context.nodeRankAttribute)
         assertEquals(true, context.nodeRankOrderAscending)
-        def newctx=service.overrideJobReferenceNodeFilter([option:[test1:'blah']], context, 'z p ${option.test1}', 2, true, 'rank', false)
+        def newctx=service.overrideJobReferenceNodeFilter(origContext, context, 'z p ${option.test1}', 2, true, 'rank', false, false)
         assertEquals(['z','p'] as Set,newctx.nodes.nodeNames as Set)
         assertEquals(true,newctx.keepgoing)
         assertEquals(2,newctx.threadCount)
         assertEquals('rank',newctx.nodeRankAttribute)
         assertEquals(false,newctx.nodeRankOrderAscending)
+    }
+
+    /**
+     * set nodeIntersect and override node filter
+     * when:
+     *      origContext (triggered job)
+     *          nodes => a b
+     *      newContext (referenced job)
+     *          nodes => x y
+     *      nodeFilter => a x
+     *      nodeIntersect => true
+     * then:
+     *      overridden context for referenced job is intersection of origContext and node filter
+     *          nodes => a
+     */
+    void testOverrideJobReferenceNodeFilter_filterAndNodeIntersect() {
+        def origContext = ExecutionContextImpl.builder()
+                .nodes(makeNodeSet(['a','b']))
+                .nodeSelector(makeSelector("a b", 1, false))
+                .threadCount(1)
+                .keepgoing(false)
+                .build()
+        def newContext = ExecutionContextImpl.builder()
+                .nodes(makeNodeSet(['x', 'y']))
+                .nodeSelector(makeSelector("x y", 1, false))
+                .threadCount(1)
+                .keepgoing(false)
+                .build()
+        service.frameworkService=mockWith(FrameworkService){
+            filterNodeSet(1..1){ NodesSelector selector, String project->
+                makeNodeSet(['a',])
+            }
+            filterAuthorizedNodes(1..1){ final String project, final Set<String> actions, final INodeSet unfiltered,
+                                         AuthContext authContext->
+                makeNodeSet(['a'])
+            }
+        }
+
+        def newctx=service.overrideJobReferenceNodeFilter(origContext, newContext, 'a x', 2, null, null, null, true)
+        assertEquals(['a'] as Set,newctx.nodes.nodeNames as Set)
+    }
+
+    /**
+     * set nodeIntersect and override node filter
+     * when:
+     *      origContext (triggered job)
+     *          nodes => a b x y
+     *      newContext (referenced job)
+     *          nodes => x y z
+     *      nodeIntersect => true
+     * then:
+     *      overridden context for referenced job is intersection of origContext and newContext
+     *          nodes => x y
+     */
+    void testOverrideJobReferenceNodeFilter_NodeIntersectWithoutFilter() {
+        def origContext = ExecutionContextImpl.builder()
+                .nodes(makeNodeSet(['a','b','x','y']))
+                .nodeSelector(makeSelector("a b x y", 1, false))
+                .threadCount(1)
+                .keepgoing(false)
+                .build()
+        def newContext = ExecutionContextImpl.builder()
+                .nodes(makeNodeSet(['x','y','z']))
+                .nodeSelector(makeSelector("x y z", 1, false))
+                .threadCount(10)
+                .keepgoing(true)
+                .build()
+        service.frameworkService=mockWith(FrameworkService){
+            filterNodeSet(1..1){ NodesSelector selector, String project->
+                makeNodeSet(['x','y'])
+            }
+            filterAuthorizedNodes(1..1){ final String project, final Set<String> actions, final INodeSet unfiltered,
+                                         AuthContext authContext->
+                makeNodeSet(['x','y'])
+            }
+        }
+
+        def newctx=service.overrideJobReferenceNodeFilter(origContext, newContext, null, 0, null, null, null, true)
+        assertEquals(['x','y'] as Set,newctx.nodes.nodeNames as Set)
+        assertEquals(true,newctx.keepgoing)
+        assertEquals(10,newctx.threadCount)
     }
 
     protected NodesSelector makeSelector(String filter, int threadcount, boolean keepgoing) {
@@ -1645,6 +1627,9 @@ class ExecutionServiceTests  {
             parseOptsFromArray(1..2){String[] args->
                 ['test1':'value']
             }
+            getProjectGlobals(1..1) {  project->
+                [:]
+            }
             filterNodeSet(1..1) { NodesSelector selector, String project ->
                 makeNodeSet(['x','y'])
             }
@@ -1665,7 +1650,7 @@ class ExecutionServiceTests  {
                 null
             }
         }
-        def newCtxt=service.createJobReferenceContext(job,context,['-test1','value'] as String[],null,null,null,null,null,false);
+        def newCtxt=service.createJobReferenceContext(job,null,context,['-test1','value'] as String[],null,null,null,null,null,false);
 
         //verify nodeset
         assertEquals(['x','y'] as Set,newCtxt.nodes.nodeNames as Set)
@@ -1705,6 +1690,9 @@ class ExecutionServiceTests  {
             parseOptsFromArray(1..2){String[] args->
                 ['test1':'value']
             }
+            getProjectGlobals(1..1) {  project->
+                [:]
+            }
             //called by createContext
             filterNodeSet(1..1) { NodesSelector selector, String project ->
                 makeNodeSet(['x','y'])
@@ -1738,7 +1726,7 @@ class ExecutionServiceTests  {
         }
         assertEquals(null, context.nodeRankAttribute)
         assertEquals(true, context.nodeRankOrderAscending)
-        def newCtxt=service.createJobReferenceContext(job,context,['-test1','value'] as String[],'z p',true,3, 'rank', false,false);
+        def newCtxt=service.createJobReferenceContext(job,null,context,['-test1','value'] as String[],'z p',true,3, 'rank', false,false);
 
         //verify nodeset
         assertEquals(['z','p'] as Set,newCtxt.nodes.nodeNames as Set)
@@ -1794,6 +1782,9 @@ class ExecutionServiceTests  {
                 parseOptsCount++
                 ['test1':'wakeful']
             }
+            getProjectGlobals(1..1) {  project->
+                [:]
+            }
             //called by createContext
             filterNodeSet(1..1) { NodesSelector selector, String project ->
                 makeNodeSet(['x','y'])
@@ -1817,7 +1808,7 @@ class ExecutionServiceTests  {
                 null
             }
         }
-        def newCtxt=service.createJobReferenceContext(job,context,['test1','${option.monkey}'] as String[],null,null,null, null, null,false);
+        def newCtxt=service.createJobReferenceContext(job,null,context,['test1','${option.monkey}'] as String[],null,null,null, null, null,false);
 
         //verify nodeset
         assertEquals(['x','y'] as Set,newCtxt.nodes.nodeNames as Set)
@@ -1884,6 +1875,9 @@ class ExecutionServiceTests  {
                 }
                 opts
             }
+            getProjectGlobals(1..1) {  project->
+                [:]
+            }
             //called by createContext
             filterNodeSet(1..1) { NodesSelector selector, String project ->
                 makeNodeSet(['x','y'])
@@ -1907,7 +1901,7 @@ class ExecutionServiceTests  {
                 null
             }
         }
-        def newCtxt=service.createJobReferenceContext(job,context,
+        def newCtxt=service.createJobReferenceContext(job,null,context,
                                                       ['test1','${option.monkey}','test2','${option.balloon}'] as String[],
                                                       null,null,null, null, null,false);
 
@@ -1934,5 +1928,37 @@ class ExecutionServiceTests  {
                       'group':'some/where'
                      ], newCtxt.dataContext['job'])
 
+    }
+
+    void testCreateExecutionOverrideNodeCustomfilter(){   
+
+        ScheduledExecution se = new ScheduledExecution(
+            jobName: 'blue',
+            project: 'AProject',
+            groupPath: 'some/where',
+            description: 'a job',
+            argString: '-a b -c d',
+            doNodedispatch: true,
+            filter: ".*",
+            workflow: new Workflow(keepgoing: true, commands: [new CommandExec([adhocRemoteString: 'test buddy', argString: '-delay 12 -monkey cheese -particle'])]),
+        )
+        se.save()
+
+        ExecutionService svc = new ExecutionService()
+        FrameworkService fsvc = new FrameworkService()
+        svc.frameworkService=fsvc
+
+        Execution e2=svc.createExecution(se,createAuthContext("user1"),null,[('_replaceNodeFilters'):"true",nodeoverride: 'filter',nodefilter:'tags: linux'])
+
+        assertNotNull(e2)
+        assertEquals('tags: linux', e2.filter)
+        assertEquals('-a b -c d', e2.argString)
+        assertEquals(se, e2.scheduledExecution)
+        assertNotNull(e2.dateStarted)
+        assertNull(e2.dateCompleted)
+        assertEquals('user1', e2.user)
+        def execs = se.executions
+        assertNotNull(execs)
+        assertTrue(execs.contains(e2))
     }
 }

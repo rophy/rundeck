@@ -1,11 +1,11 @@
 %{--
-  - Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
   -
   - Licensed under the Apache License, Version 2.0 (the "License");
   - you may not use this file except in compliance with the License.
   - You may obtain a copy of the License at
   -
-  -        http://www.apache.org/licenses/LICENSE-2.0
+  -     http://www.apache.org/licenses/LICENSE-2.0
   -
   - Unless required by applicable law or agreed to in writing, software
   - distributed under the License is distributed on an "AS IS" BASIS,
@@ -25,23 +25,47 @@
     <div class="row">
     <div class="col-sm-12">
         <g:if test="${showPluginIcon}">
-            <i class="rdicon icon-small plugin"></i>
+            <stepplugin:pluginIcon service="${serviceName}"
+                                   name="${description.name}"
+                                   width="16px"
+                                   height="16px">
+                <i class="rdicon icon-small plugin"></i>
+            </stepplugin:pluginIcon>
         </g:if>
         <g:if test="${showNodeIcon}">
             <i class="rdicon icon-small node"></i>
         </g:if>
         <span class=" text-info">
-            <g:if test="${!hideTitle}"><g:enc>${description.title}</g:enc></g:if>
+            <g:if test="${!hideTitle}">
+                <stepplugin:message
+                        service="${serviceName}"
+                        name="${description.name}"
+                        code="plugin.title"
+                        default="${description.title}"/>
+            </g:if>
         </span>
             <g:if test="${!hideDescription}">
             <g:if test="${!fullDescription}">
 
                 <g:render template="/scheduledExecution/description"
-                          model="[description: description.description, textCss: 'small text-muted',
-                                  mode: 'hidden', rkey: g.rkey()]"/>
+                          model="[description: stepplugin.messageText(
+                                  service: serviceName,
+                                  name: description.name,
+                                  code: 'plugin.description',
+                                  default: description.description
+                          ),
+                                  service:serviceName,
+                                  name:description.name,
+                                  markdownCss: 'small text-muted',
+                                  textCss    : 'small text-muted',
+                                  mode       : 'collapsed', rkey: g.rkey()]"/>
             </g:if>
                 <g:else>
-                    <small class="text-muted"><g:enc>${description.description}</g:enc></small>
+                    <small class="text-muted"><stepplugin:message
+                            service="${serviceName}"
+                            name="${description.name}"
+                            code="plugin.description"
+                            default="${description.description}"/></small>
 
                 </g:else>
             </g:if>
@@ -63,7 +87,7 @@
             <g:if test="${description}">
                 <g:each in="${description.properties}" var="prop">
                     <g:render template="/framework/pluginConfigPropertySummaryValue"
-                              model="${[prop:prop,prefix:prefix,values:values,includeFormFields:includeFormFields]}"/>
+                              model="${[service: serviceName, provider: description.name, messagePrefix:messagePrefix, prop: prop, prefix: prefix, values: values, includeFormFields: includeFormFields]}"/>
                 </g:each>
             </g:if>
         </span>

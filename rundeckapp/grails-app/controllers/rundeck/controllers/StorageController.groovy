@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.rundeck.app.support.StorageParams
@@ -437,40 +453,53 @@ class StorageController extends ControllerBase{
      * Handle resource requests to the /ssh-key path
      * @return
      */
-    def apiKeys() {
+    def apiKeys(StorageParams storageParams) {
         if(!apiService.requireVersion(request,response,ApiRequestFilters.V11)){
             return
         }
         params.resourcePath = "/keys/${params.resourcePath?:''}"
+        storageParams.resourcePath = params.resourcePath
+        storageParams.validate()
         switch (request.method) {
             case 'POST':
-                apiPostResource()
+                apiPostResource(storageParams)
                 break
             case 'PUT':
-                apiPutResource()
+                apiPutResource(storageParams)
                 break
             case 'GET':
-                apiGetResource()
+                apiGetResource(storageParams)
                 break
             case 'DELETE':
-                apiDeleteResource()
+                apiDeleteResource(storageParams)
                 break
         }
     }
 
-    def apiPostResource() {
+    def apiPostResource(StorageParams storageParams) {
         if (!apiService.requireApi(request, response)) {
             return
         }
-        return postResource()
+        return postResource(storageParams)
     }
-    private def postResource() {
+
+    private def postResource(StorageParams storageParams) {
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
-        String resourcePath = params.resourcePath
+        String resourcePath = storageParams.resourcePath
+        storageParams.requireRoot('/keys/')
+        if (storageParams.hasErrors()) {
+            return apiService.renderErrorFormat(response, [
+                    status: HttpServletResponse.SC_BAD_REQUEST,
+                    code  : 'api.error.invalid.request',
+                    args  : [storageParams.errors.allErrors.collect { g.message(error: it) }.join(",")]
+            ]
+            )
+        }
+        //require path is longer than "/keys/"
         if (storageService.hasResource(authContext, resourcePath)) {
             response.status = 409
             return renderError("resource already exists: ${resourcePath}")
-        }else if(storageService.hasPath(authContext, resourcePath)){
+        } else if (storageService.hasPath(authContext, resourcePath)) {
             response.status = 409
             return renderError("directory already exists: ${resourcePath}")
         }
@@ -500,15 +529,25 @@ class StorageController extends ControllerBase{
     }
 
 
-    def apiDeleteResource() {
+    def apiDeleteResource(StorageParams storageParams) {
         if (!apiService.requireApi(request, response)) {
             return
         }
-        return deleteResource()
+        return deleteResource(storageParams)
     }
-    private def deleteResource() {
+
+    private def deleteResource(StorageParams storageParams) {
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
         String resourcePath = params.resourcePath
+        storageParams.requireRoot('/keys/')
+        if (storageParams.hasErrors()) {
+            return apiService.renderErrorFormat(response, [
+                    status: HttpServletResponse.SC_BAD_REQUEST,
+                    code  : 'api.error.invalid.request',
+                    args  : [storageParams.errors.allErrors.collect { g.message(error: it) }.join(",")]
+            ]
+            )
+        }
         if(!storageService.hasResource(authContext, resourcePath)) {
             return apiService.renderErrorFormat(response, [
                     status: HttpServletResponse.SC_NOT_FOUND,
@@ -543,15 +582,25 @@ class StorageController extends ControllerBase{
         }
     }
 
-    def apiPutResource() {
+    def apiPutResource(StorageParams storageParams) {
         if (!apiService.requireApi(request, response)) {
             return
         }
-        return putResource()
+        return putResource(storageParams)
     }
-    private def putResource() {
+
+    private def putResource(StorageParams storageParams) {
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
         String resourcePath = params.resourcePath
+        storageParams.requireRoot('/keys/')
+        if (storageParams.hasErrors()) {
+            return apiService.renderErrorFormat(response, [
+                    status: HttpServletResponse.SC_BAD_REQUEST,
+                    code  : 'api.error.invalid.request',
+                    args  : [storageParams.errors.allErrors.collect { g.message(error: it) }.join(",")]
+            ]
+            )
+        }
         def found = storageService.hasResource(authContext, resourcePath)
         if (!found) {
             response.status = 404

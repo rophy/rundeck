@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dtolabs.rundeck.app.internal.logging
 
 import com.dtolabs.rundeck.core.logging.LogLevel
@@ -253,6 +269,7 @@ class RundeckLogFormatTest  {
     void testSeekBackSimple(){
         RundeckLogFormat format = new RundeckLogFormat()
         def f = File.createTempFile("log-format-test", ".rdlog")
+        f.deleteOnExit()
 
         def line1 = '^2015-05-15T16:50:57Z|||{node=madmartigan.local|step=1|stepctx=1|user=greg}|testing execution output api-plain line 1^\n'
         def line2 = '^2015-05-15T16:50:57Z|||{node=madmartigan.local|step=1|stepctx=1|user=greg}|line 2^\n'
@@ -276,6 +293,7 @@ class RundeckLogFormatTest  {
     void testSeekBackMeta(){
         RundeckLogFormat format = new RundeckLogFormat()
         def f = File.createTempFile("log-format-test", ".rdlog")
+        f.deleteOnExit()
 
         def line1 = '^2015-05-15T16:50:57Z|||{node=madmartigan.local|step=1|stepctx=1|user=greg}|testing execution output api-plain line 1^\n'
         def line2 = '^2015-05-15T16:50:57Z|nodebegin||{node=madmartigan.local|step=1|stepctx=1|user=greg}|^\n'
@@ -288,6 +306,7 @@ class RundeckLogFormatTest  {
     void testSeekBackFull(){
         RundeckLogFormat format = new RundeckLogFormat()
         def f = File.createTempFile("log-format-test", ".rdlog")
+        f.deleteOnExit()
 
         def part1 = '^text/x-rundeck-log-v2.0^\n' +
                 '^2015-05-15T16:50:57Z|stepbegin||{node=madmartigan.local|step=1|stepctx=1|user=admin}|^\n' +

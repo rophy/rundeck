@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.services
 
 import com.dtolabs.rundeck.app.internal.workflow.LogMutableWorkflowState
@@ -128,6 +144,7 @@ class WorkflowService implements ApplicationContextAware,ExecutionFileProducer{
                     def jobArgs = OptsUtil.burst(jexec.argString ?: '')
                     newContext = executionService.createJobReferenceContext(
                             se,
+                            null,
                             parent,
                             jobArgs,
                             jexec.nodeFilter,
@@ -135,6 +152,7 @@ class WorkflowService implements ApplicationContextAware,ExecutionFileProducer{
                             jexec.nodeThreadcount,
                             jexec.nodeRankAttribute,
                             jexec.nodeRankOrderAscending,
+                            jexec.nodeIntersect,
                             false
                     )
                 } catch (ExecutionServiceValidationException e) {
@@ -270,19 +288,19 @@ class WorkflowService implements ApplicationContextAware,ExecutionFileProducer{
      * @param nodes
      * @return
      */
-    WorkflowStateFileLoader requestStateSummary(Execution e, List<String> nodes,boolean selectedOnly=false,boolean performLoad = true){
+    WorkflowStateFileLoader requestStateSummary(Execution e, List<String> nodes,boolean selectedOnly=false,boolean performLoad = true, boolean stepStates=false){
         //look for active state
         def state1 = activeStates[e.id]
         if (state1) {
             def state= stateMapping.mapOf(e.id, state1)
-            state=stateMapping.summarize(new HashMap(state),nodes,selectedOnly)
+            state=stateMapping.summarize(new HashMap(state),nodes,selectedOnly,stepStates)
             return new WorkflowStateFileLoader(workflowState: state, state: ExecutionLogState.AVAILABLE)
         }
 
         //look for cached local data
         def statemap=stateCache.getIfPresent(e.id)
         if (statemap) {
-            statemap=stateMapping.summarize(new HashMap(statemap),nodes,selectedOnly)
+            statemap=stateMapping.summarize(new HashMap(statemap),nodes,selectedOnly,stepStates)
             return new WorkflowStateFileLoader(workflowState: statemap, state: ExecutionLogState.AVAILABLE)
         }
 
@@ -293,7 +311,7 @@ class WorkflowService implements ApplicationContextAware,ExecutionFileProducer{
             //cache local data
             statemap = deserializeState(loader.file)
             stateCache.put(e.id,statemap)
-            statemap=stateMapping.summarize(new HashMap(statemap),nodes,selectedOnly)
+            statemap=stateMapping.summarize(new HashMap(statemap),nodes,selectedOnly,stepStates)
         }
         return new WorkflowStateFileLoader(workflowState: statemap, state: loader.state, errorCode: loader.errorCode,
                                            errorData: loader.errorData, file: loader.file)

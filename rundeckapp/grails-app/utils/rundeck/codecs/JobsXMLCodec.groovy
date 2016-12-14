@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.codecs
 
 import com.dtolabs.rundeck.app.support.BuilderUtil
@@ -6,21 +22,6 @@ import groovy.xml.MarkupBuilder
 import rundeck.ScheduledExecution
 import rundeck.controllers.JobXMLException
 
-/*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *        http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 /*
 * JobsXMLCodec encapsulates encoding and decoding of the Jobs XML format.
 *
@@ -36,22 +37,48 @@ import rundeck.controllers.JobXMLException
 
 class JobsXMLCodec {
 
-    static encode = {list ->
+    static encodeStripUuid = { list ->
         def writer = new StringWriter()
         def xml = new MarkupBuilder(writer)
-        JobsXMLCodec.encodeWithBuilder(list,xml)
+        JobsXMLCodec.encodeWithBuilder(list, xml, false)
         return writer.toString()
     }
-    static encodeWithBuilder={ list,xml ->
+    static encodeReplaceUuid = { list, Map replacements ->
+        def writer = new StringWriter()
+        def xml = new MarkupBuilder(writer)
+        JobsXMLCodec.encodeWithBuilder(list, xml, false, replacements)
+        return writer.toString()
+    }
+    static encode = { list ->
+        def writer = new StringWriter()
+        def xml = new MarkupBuilder(writer)
+        encodeWithBuilder(list, xml)
+        return writer.toString()
+    }
+    static encodeMaps (list, boolean preserveUuid = true, Map<String, String> replaceIds = [:] ){
+        def writer = new StringWriter()
+        def xml = new MarkupBuilder(writer)
+        encodeMapsWithBuilder(list, xml, preserveUuid, replaceIds)
+        return writer.toString()
+    }
+
+    static encodeWithBuilder(list, xml, boolean preserveUuid = true, Map<String, String> replaceIds = [:]) {
+        return encodeMapsWithBuilder(list.collect { it.toMap() }, xml, preserveUuid, replaceIds)
+    }
+
+    static encodeMapsWithBuilder(list, xml, boolean preserveUuid = true, Map<String, String> replaceIds = [:]) {
         BuilderUtil bu = new BuilderUtil()
         bu.forceLineEndings=true
         bu.lineEndingChars='\n'
         //todo: set line ending from config?
         bu.canonical=true
         xml.joblist() {
-            list.each{ ScheduledExecution jobi->
+            list.each{ Map jobMap->
                 job{
-                    bu.mapToDom(JobsXMLCodec.convertJobMap(jobi.toMap()),delegate)
+                    bu.mapToDom(
+                            JobsXMLCodec.convertJobMap(jobMap, preserveUuid, replaceIds[jobMap.id]),
+                            delegate
+                    )
                 }
             }
         }
@@ -121,6 +148,7 @@ class JobsXMLCodec {
 
         map.scheduleEnabled = XmlParserUtil.stringToBool(map.scheduleEnabled, true)
         map.executionEnabled = XmlParserUtil.stringToBool(map.executionEnabled, true)
+        map.nodeFilterEditable = XmlParserUtil.stringToBool(map.nodeFilterEditable, true)
 
         //perform structure conversions for expected input for populating ScheduledExecution
 
@@ -383,8 +411,16 @@ class JobsXMLCodec {
     /**
      * Convert structure returned by job.toMap into correct structure for jobs xml
      */
-    static convertJobMap={Map map->
+    static convertJobMap = { Map map, boolean preserveUuid = true, String replaceId = null ->
         map.remove('project')
+        if (!preserveUuid) {
+            map.remove('id')
+            map.remove('uuid')
+            if (replaceId) {
+                map['id'] = replaceId
+                map['uuid'] = replaceId
+            }
+        }
 
         def optdata = map.remove('options')
         boolean preserveOrder=false

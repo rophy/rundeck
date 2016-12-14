@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck
 import com.dtolabs.rundeck.app.support.ExecutionContext
 import com.dtolabs.rundeck.core.common.FrameworkResource
@@ -20,6 +36,7 @@ class Execution extends ExecutionContext {
     boolean cancelled
     Boolean timedOut=false
     Workflow workflow
+    String executionType
     Integer retryAttempt=0
     Boolean willRetry=false
     Execution retryExecution
@@ -75,9 +92,11 @@ class Execution extends ExecutionContext {
         timeout(maxSize: 256, blank: true, nullable: true,)
         retry(maxSize: 256, blank: true, nullable: true,matches: /^\d+$/)
         timedOut(nullable: true)
+        executionType(nullable: true, maxSize: 30)
         retryAttempt(nullable: true)
         retryExecution(nullable: true)
         willRetry(nullable: true)
+        nodeFilterEditable(nullable: true)
     }
 
     static mapping = {
@@ -109,6 +128,15 @@ class Execution extends ExecutionContext {
         retry( type: 'text')
     }
 
+    static namedQueries = {
+        isScheduledAdHoc {
+            eq 'status', ExecutionService.EXECUTION_SCHEDULED
+        }
+        withServerNodeUUID { uuid ->
+            eq 'serverNodeUUID', uuid
+        }
+	}
+
 
     public String toString() {
         return "Workflow execution: ${workflow}"
@@ -119,13 +147,15 @@ class Execution extends ExecutionContext {
     }
 
     public String getExecutionState() {
-        return null == dateCompleted ? ExecutionService.EXECUTION_RUNNING :
-                (status in ['true', 'succeeded']) ? ExecutionService.EXECUTION_SUCCEEDED :
-                        cancelled ? ExecutionService.EXECUTION_ABORTED :
-                                willRetry ? ExecutionService.EXECUTION_FAILED_WITH_RETRY :
-                                        timedOut ? ExecutionService.EXECUTION_TIMEDOUT :
-                                                (status in ['false', 'failed']) ? ExecutionService.EXECUTION_FAILED :
-                                                        isCustomStatusString(status)? ExecutionService.EXECUTION_STATE_OTHER : status.toLowerCase()
+        return cancelled ? ExecutionService.EXECUTION_ABORTED :
+                null != dateStarted && dateStarted.getTime() > System.currentTimeMillis() ? ExecutionService.EXECUTION_SCHEDULED :
+                    null == dateCompleted ? ExecutionService.EXECUTION_RUNNING :
+                        (status in ['true', 'succeeded']) ? ExecutionService.EXECUTION_SUCCEEDED :
+                                cancelled ? ExecutionService.EXECUTION_ABORTED :
+                                        willRetry ? ExecutionService.EXECUTION_FAILED_WITH_RETRY :
+                                                timedOut ? ExecutionService.EXECUTION_TIMEDOUT :
+                                                        (status in ['false', 'failed']) ? ExecutionService.EXECUTION_FAILED :
+                                                                isCustomStatusString(status)? ExecutionService.EXECUTION_STATE_OTHER : status.toLowerCase()
     }
 
     public boolean hasExecutionEnabled() {
@@ -141,7 +171,8 @@ class Execution extends ExecutionContext {
                                                  ExecutionService.EXECUTION_FAILED_WITH_RETRY,
                                                  ExecutionService.EXECUTION_ABORTED,
                                                  ExecutionService.EXECUTION_SUCCEEDED,
-                                                 ExecutionService.EXECUTION_FAILED])
+                                                 ExecutionService.EXECUTION_FAILED,
+                                                 ExecutionService.EXECUTION_SCHEDULED])
     }
 
     // various utility methods helpful to the presentation layer
@@ -194,6 +225,9 @@ class Execution extends ExecutionContext {
         }
         map.id= this.id
         map.doNodedispatch= this.doNodedispatch
+        if(this.executionType) {
+            map.executionType=executionType
+        }
         if(this.retryAttempt){
             map.retryAttempt=retryAttempt
         }
@@ -244,6 +278,9 @@ class Execution extends ExecutionContext {
         exec.loglevel = data.loglevel
         exec.doNodedispatch = XmlParserUtil.stringToBool(data.doNodedispatch,false)
         exec.timeout = data.timeout
+        if(data.executionType) {
+            exec.executionType = data.executionType
+        }
         if(data.retryAttempt){
             exec.retryAttempt= XmlParserUtil.stringToInt(data.retryAttempt, 0)
         }

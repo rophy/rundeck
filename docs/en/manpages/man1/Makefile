@@ -4,7 +4,7 @@ DIST = ../../dist
 MANSFX=1
 .SUFFIXES: .1
 .PHONY: all
-PAGES = *.md
+PAGES = rd-acl.md
 
 all: roff manpages
 
@@ -23,4 +23,4 @@ roff :
 
 clean :
 	@rm -rf $(DIST)/man/man1
-	@-rm *.gz
+	@-rm *.gz *.1

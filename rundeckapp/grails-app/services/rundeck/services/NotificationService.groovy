@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.services
 
 import com.dtolabs.rundeck.core.dispatcher.DataContextUtils
@@ -26,21 +42,6 @@ import rundeck.services.logging.ExecutionLogState
 
 import java.text.SimpleDateFormat
 
-/*
-* Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
-*
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-*
-*        http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*/
 /*
  * NotificationService.java
  *
@@ -149,7 +150,7 @@ public class NotificationService implements ApplicationContextAware{
                     //sending notification of a status trigger for the Job
                     def Execution exec = content.execution
                     def mailConfig = n.mailConfiguration()
-                    def destarr=mailConfig.recipients?.split(",") as List
+
                     def configSubject=mailConfig.subject
                     def configAttachLog=mailConfig.attachLog
                     final state = ExecutionService.getExecutionState(exec)
@@ -169,7 +170,6 @@ public class NotificationService implements ApplicationContextAware{
                     def jobMap=exportJobdata(source)
                     Map context = generateContextData(exec, content)
                     def contextMap=[:]
-
                     execMap.projectHref = projUrl
 
                     contextMap['job'] = toStringStringMap(jobMap)
@@ -178,6 +178,21 @@ public class NotificationService implements ApplicationContextAware{
 
                     context = DataContextUtils.merge(context, contextMap)
                     context = DataContextUtils.addContext("notification", [trigger: trigger, eventStatus: statMsg[state]], context)
+
+                    def destarr=[]
+                    def destrecipients=mailConfig.recipients
+                    if(destrecipients){
+                        if(destrecipients.indexOf('${')>=0){
+                            try {
+                                destrecipients=DataContextUtils.replaceDataReferences(destrecipients, context ,null,true)
+                            } catch (DataContextUtils.UnresolvedDataReferenceException e) {
+                                log.error("Cannot send notification email: "+e.message +
+                                                  ", context: user: "+ exec.user+", job: "+source.generateFullName());
+
+                            }
+                        }
+                        destarr = destrecipients.split(', *') as List
+                    }
 
                     //set up templates
                     def subjecttmpl='${notification.eventStatus} [${exec.project}] ${job.group}/${job.name} ${exec' +
@@ -254,7 +269,7 @@ public class NotificationService implements ApplicationContextAware{
                                 sendTo=DataContextUtils.replaceDataReferences(recipient, context ,null,true)
                             } catch (DataContextUtils.UnresolvedDataReferenceException e) {
                                 log.error("Cannot send notification email: "+e.message +
-                                        ", context: user: "+ exec.user+", job: "+source.generateFullName());
+                                                  ", context: user: "+ exec.user+", job: "+source.generateFullName());
                                 return
                             }
                         }

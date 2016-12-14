@@ -1,11 +1,30 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
+import com.dtolabs.rundeck.plugins.rundeck.UIPlugin
+import org.rundeck.util.Toposort
 import org.rundeck.web.infosec.HMacSynchronizerTokensHolder
 import org.codehaus.groovy.grails.web.metaclass.InvalidResponseHandler
 import org.codehaus.groovy.grails.web.metaclass.ValidResponseHandler
 import org.codehaus.groovy.grails.web.servlet.mvc.GrailsWebRequest
 import org.codehaus.groovy.grails.web.servlet.mvc.TokenResponseHandler
 import org.springframework.web.context.request.RequestContextHolder
+import rundeck.services.UiPluginService
 
 import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
@@ -17,8 +36,82 @@ import java.util.zip.GZIPOutputStream
  * @since 2014-03-12
  */
 class ControllerBase {
+    public static final ArrayList<String> UIPLUGIN_PAGES = [
+            'menu/jobs',
+            'menu/home',
+            'menu/projectHome',
+            'menu/executionMode',
+            'menu/admin',
+            "menu/logStorage",
+            "menu/securityConfig",
+            "menu/systemInfo",
+            "menu/systemConfig",
+            "menu/metrics",
+            "menu/plugins",
+            "menu/welcome",
+            "menu/storage",
+            "scheduledExecution/show",
+            "scheduledExecution/edit",
+            "scheduledExecution/delete",
+            "scheduledExecution/create",
+            "execution/show",
+            "framework/nodes",
+            "framework/adhoc",
+            "framework/createProject",
+            "framework/editProject",
+            "framework/editProjectConfig",
+            "scm/index",
+            "reports/index",
+    ]
     def grailsApplication
+    UiPluginService uiPluginService
 
+    protected def loadUiPlugins(path) {
+        def uiplugins = [:]
+        if ((path in UIPLUGIN_PAGES)) {
+            def page = uiPluginService.pluginsForPage(path)
+            page.each { name, inst ->
+                def requires = inst.requires(path)
+
+                uiplugins[name] = [
+                        scripts : inst.scriptResourcesForPath(path),
+                        styles  : inst.styleResourcesForPath(path),
+                        requires: requires,
+                ]
+            }
+        }
+        uiplugins
+    }
+
+    protected def sortUiPlugins(Map uiplugins) {
+        Map inbound = [:]
+        Map outbound = [:]
+
+        uiplugins.each { name, inst ->
+            inbound[name] = inst.requires ?: []
+            inbound[name].each { k ->
+                if (!outbound[k]) {
+                    outbound[k] = [name]
+                } else {
+                    outbound[k] << name
+                }
+            }
+        }
+        List sort = uiplugins.keySet().sort()
+        if (outbound.size() > 0 || inbound.size() > 0) {
+            def result = Toposort.toposort(sort, outbound, inbound)
+            if (!result.cycle) {
+                return result.result
+            }
+        }
+        sort
+    }
+
+    def afterInterceptor = { model ->
+        model.uiplugins = loadUiPlugins(controllerName + "/" + actionName)
+        model.uipluginsorder = sortUiPlugins(model.uiplugins)
+        model.uipluginsPath = controllerName + "/" + actionName
+    }
     protected def withHmacToken(Closure valid){
         GrailsWebRequest request= (GrailsWebRequest) RequestContextHolder.currentRequestAttributes()
         TokenResponseHandler handler
@@ -68,7 +161,7 @@ class ControllerBase {
     def renderCompressed(HttpServletRequest request,HttpServletResponse response,String contentType, data){
         if(grailsApplication.config.rundeck?.ajax?.compression=='gzip'
                 && request.getHeader("Accept-Encoding").contains("gzip")){
-            response.setHeader("Content-Encoding","x-gzip")
+            response.setHeader("Content-Encoding","gzip")
             response.setHeader("Content-Type",contentType)
             def stream = new GZIPOutputStream(response.outputStream)
             stream.withWriter("UTF-8"){ it << data }

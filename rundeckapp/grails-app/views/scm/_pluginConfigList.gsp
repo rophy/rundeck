@@ -1,8 +1,25 @@
 
-<h4><g:message code="scm.${integration}.title"/></h4>
+<h4>%{--
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+  -
+  - Licensed under the Apache License, Version 2.0 (the "License");
+  - you may not use this file except in compliance with the License.
+  - You may obtain a copy of the License at
+  -
+  -     http://www.apache.org/licenses/LICENSE-2.0
+  -
+  - Unless required by applicable law or agreed to in writing, software
+  - distributed under the License is distributed on an "AS IS" BASIS,
+  - WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  - See the License for the specific language governing permissions and
+  - limitations under the License.
+  --}%
+
+<g:message code="scm.${integration}.title"/></h4>
 <span class="help-block">
     <g:message code="scm.${integration}.plugins.help"/>
 </span>
+<g:set var="serviceName" value="${integration=='export'?'ScmExport':'ScmImport'}"/>
 
 <g:if test="${pluginConfig && pluginConfig.type && enabled && configuredPlugin && enabled}">
 %{--Disable plugin modal--}%
@@ -27,7 +44,11 @@
 
                             <div class="col-sm-10">
                                 <span class="form-control-static">
-                                    ${configuredPlugin.description.title}
+                                    <stepplugin:message
+                                            service="${serviceName}"
+                                            name="${configuredPlugin?.description.name}"
+                                            code="plugin.title"
+                                            default="${configuredPlugin?.description.title?:configuredPlugin?.description.name}"/>
                                 </span>
                                 <g:hiddenField name="type" value="${pluginConfig.type}"/>
                                 <g:hiddenField name="project" value="${params.project}"/>
@@ -76,7 +97,11 @@
 
                             <div class="col-sm-10">
                                 <span class="form-control-static">
-                                    ${configuredPlugin?.description.title}
+                                    <stepplugin:message
+                                            service="${serviceName}"
+                                            name="${configuredPlugin?.description.name}"
+                                            code="plugin.title"
+                                            default="${configuredPlugin?.description.title?:configuredPlugin?.description.name}"/>
                                 </span>
                                 <g:hiddenField name="type" value="${pluginConfig.type}"/>
                                 <g:hiddenField name="project" value="${params.project}"/>
@@ -114,8 +139,16 @@
             <div class="list-group-item">
 
                 <h4 class="list-group-item-heading">
-                    ${plugins[pluginName].description.title}
-
+                    <stepplugin:pluginIcon service="${serviceName}"
+                                           name="${pluginName}"
+                                           width="24px"
+                                           height="24px"
+                    />
+                    <stepplugin:message
+                            service="${serviceName}"
+                            name="${pluginName}"
+                            code="plugin.title"
+                            default="${plugins[pluginName].description.title?:pluginName}"/>
                     <g:if test="${isConfiguredButDisabled}">
                         <span class="badge"><g:message code="badge.Disabled.title"/></span>
                     </g:if>
@@ -132,8 +165,10 @@
 
                     <g:render template="/framework/renderPluginConfig"
                               model="${[
+                                      serviceName:serviceName,
                                       values     : isConfigured ? pluginConfig.config : [:],
                                       description: plugins[pluginName].description,
+                                      messagePrefix:'setup.',
                                       hideTitle  : true
                               ]}"/>
 

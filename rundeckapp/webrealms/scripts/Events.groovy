@@ -1,4 +1,19 @@
-import org.eclipse.jetty.plus.jaas.JAASLoginService
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import org.eclipse.jetty.server.Server;
 
 eventConfigureJetty = { Server server ->
@@ -14,12 +29,20 @@ eventConfigureJetty = { Server server ->
 //                    def org.mortbay.jetty.plus.jaas.JAASUserRealm realm = (org.mortbay.jetty.plus.jaas.JAASUserRealm)o
 //                    realm.setCallbackHandlerClass("org.mortbay.jetty.plus.jaas.callback.DefaultCallbackHandler")
 //                }
-                if (o instanceof JAASLoginService) {
-                    //configure properties
-                    def JAASLoginService realm = (JAASLoginService) o
-                    realm.setName(config.server.addrealm.name)
-                    realm.setLoginModuleName(config.server.addrealm.LoginModuleName)
-                    server.addBean(realm)
+                try {
+                    Class jaasclass = Class.forName("org.eclipse.jetty.jaas.JAASLoginService")
+
+                    if (o.class.isAssignableFrom(jaasclass)) {
+                        //configure properties
+//                        def JAASLoginService realm = (JAASLoginService) o
+                        def realm=o
+                        realm.name=config.server.addrealm.name
+                        realm.loginModuleName=config.server.addrealm.LoginModuleName
+                        server.addBean(realm)
+                    }
+                }catch (Exception e){
+                    System.err.println "Failed to add login service: ${e}"
+                    throw e
                 }
             } catch (Exception e) {
                 System.err.println "Failed to add login service: ${e}"

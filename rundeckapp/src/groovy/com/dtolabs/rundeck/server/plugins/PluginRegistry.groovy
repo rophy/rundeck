@@ -1,7 +1,27 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.dtolabs.rundeck.server.plugins
 
 import com.dtolabs.rundeck.core.common.Framework
+import com.dtolabs.rundeck.core.execution.service.ProviderLoaderException
 import com.dtolabs.rundeck.core.plugins.PluggableProviderService
+import com.dtolabs.rundeck.core.plugins.PluginMetadata
+import com.dtolabs.rundeck.core.plugins.PluginResourceLoader
+import com.dtolabs.rundeck.core.plugins.ProviderIdent
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolver
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.utils.IPropertyLookup
@@ -138,4 +158,22 @@ public interface PluginRegistry {
      * @return
      */
     public <T> Map<String, DescribedPlugin<T>> listPluginDescriptors(Class groovyPluginType, PluggableProviderService<T> service) ;
+
+    /**
+     * Return plugin resource loader
+     * @param service
+     * @param provider
+     * @return
+     * @throws ProviderLoaderException
+     */
+    public PluginResourceLoader getResourceLoader(String service, String provider) throws ProviderLoaderException;
+
+    /**
+     * Return plugin metadata
+     * @param service
+     * @param provider
+     * @return
+     * @throws ProviderLoaderException
+     */
+    public PluginMetadata getPluginMetadata(String service, String provider) throws ProviderLoaderException;
 }

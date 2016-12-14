@@ -2,6 +2,54 @@
 % Greg Schueler
 % April 15, 2015
 
+## Upgrading to Rundeck 2.7 from 2.6.x
+
+
+### Java 8 is required
+
+Well, not technically *required* for Rundeck server so much as heavily frowned upon. You should upgrade, consider Java 7 no longer supported.  We may switch to actually requiring it soon.
+
+### Default database (H2) upgraded to 1.4.x
+    
+The new version uses a different storage format ("mv_store") so switching back to 2.6 after creating a DB with 2.7 may not work.
+
+In-place upgrade with the old storage format do seem to work, however if necessary to keep compatibility with an existing older h2 database, you can update your dataSource.url in rundeck-config.properties to add `;mv_store=false`
+
+    dataSource.url = jdbc:h2:file:/path;MVCC=true;mv_store=false
+
+* You can remove `;TRACE_LEVEL_FILE=4` from the dataSource.url in rundeck-config.properties
+
+### CLI tools are gone
+      
+We have removed the "rd-*" and "dispatch" and "run" tools from the install, although the "rd-acl" tool is still available.
+
+You should use the new "rd" tool available separately, see <https://rundeck.github.io/rundeck-cli/>.
+
+However, `rd` *does* require Java 8.  (See, gotcha.)
+
+### Debian/RPM startup script changes
+      
+The file `/etc/rundeck/profile` was modified and will probably not work with your existing install.
+(This change was snafu'd into 2.6.10 and reverted in 2.6.11)
+
+If you have customized `/etc/rundeck/profile`, look at the new contents and move your custom env var changes to a file in `/etc/sysconfig/rundeckd`.
+
+### Inline script token expansion changes
+      
+(This is another change tha had some hiccups in the 2.6.10 release.)
+
+You must now use `@@` (two at-signs) to produce a literal `@` in an inline script when it might be interpreted as a token, i.e. `@word@` looks like a token, but `@word space@` is ok.
+
+You can globally disable inline script token expansion, see [framework.properties](../administration/configuration-file-reference.html#framework.properties).
+
+### Jetty embedded server was upgraded to 9.0.x
+
+If you are using the default "realm.properties" login mechanism, the default JAAS configuration for file-based authentication will need to be modified to use correct class name in your `jaas-loginmodule.conf`:
+
+* **old value**: `org.eclipse.jetty.plus.jaas.spi.PropertyFileLoginModule`
+* Replace with: `org.eclipse.jetty.jaas.spi.PropertyFileLoginModule`
+
+
 ## Upgrading to Rundeck 2.5
 
 

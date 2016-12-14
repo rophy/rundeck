@@ -1,11 +1,11 @@
 %{--
-  - Copyright 2011 DTO Solutions, Inc. (http://dtosolutions.com)
+  - Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
   -
   - Licensed under the Apache License, Version 2.0 (the "License");
   - you may not use this file except in compliance with the License.
   - You may obtain a copy of the License at
   -
-  -        http://www.apache.org/licenses/LICENSE-2.0
+  -     http://www.apache.org/licenses/LICENSE-2.0
   -
   - Unless required by applicable law or agreed to in writing, software
   - distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,12 +31,15 @@
 
     <g:javascript library="prototype/effects"/>
     <g:javascript library="resourceModelConfig"/>
+    <asset:javascript src="leavePageConfirm.js"/>
     <asset:javascript src="storageBrowseKO.js"/>
+    <g:jsMessages code="page.unsaved.changes"/>
     <g:javascript>
 
     var configControl;
+    var confirm = new PageConfirm(message('page.unsaved.changes'));
     function init(){
-        configControl=new ResourceModelConfigControl('${enc(js:prefixKey)}');
+        configControl=new ResourceModelConfigControl('${enc(js:prefixKey)}',confirm.setNeedsConfirm);
         configControl.pageInit();
         $$('input').each(function(elem){
             if(elem.type=='text'){
@@ -44,6 +47,7 @@
             }
         });
     }
+    var _storageBrowseSelected=confirm.setNeedsConfirm;
     jQuery(init);
     </g:javascript>
 </head>
@@ -65,8 +69,8 @@
                 </div>
                 <g:render template="editProjectForm" model="${[editOnly:true,project: params.project ?: request.project]}"/>
                 <div class="panel-footer">
-                    <g:submitButton name="cancel" value="${g.message(code:'button.action.Cancel',default:'Cancel')}" class="btn btn-default"/>
-                    <g:submitButton name="save" value="${g.message(code:'button.action.Save',default:'Save')}" class="btn btn-primary"/>
+                    <g:submitButton name="cancel" value="${g.message(code:'button.action.Cancel',default:'Cancel')}" class="btn btn-default reset_page_confirm"/>
+                    <g:submitButton name="save" value="${g.message(code:'button.action.Save',default:'Save')}" class="btn btn-primary reset_page_confirm"/>
                 </div>
             </div>
         </div>

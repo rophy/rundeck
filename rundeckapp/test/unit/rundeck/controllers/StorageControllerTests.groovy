@@ -1,3 +1,19 @@
+/*
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package rundeck.controllers
 
 import com.dtolabs.rundeck.app.support.StorageParams
@@ -131,7 +147,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         def result=controller.apiPostResource()
         assertEquals(409,response.status)
     }
@@ -147,7 +163,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         def result=controller.apiPostResource()
         assertEquals(409,response.status)
     }
@@ -168,7 +184,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         response.format='json'
         def result=controller.apiPostResource()
         assertEquals(201,response.status)
@@ -199,7 +215,7 @@ class StorageControllerTests {
                 assertEquals("failed",map.message)
             }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         response.format='json'
         def result=controller.apiPostResource()
     }
@@ -214,7 +230,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         def result=controller.apiPutResource()
         assertEquals(404,response.status)
     }
@@ -234,7 +250,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         response.format='json'
         def result=controller.apiPutResource()
         assertEquals(200,response.status)
@@ -264,7 +280,7 @@ class StorageControllerTests {
                 assertEquals("failed",map.message)
             }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         response.format='json'
         def result=controller.apiPutResource()
     }
@@ -283,7 +299,7 @@ class StorageControllerTests {
                 assertEquals("api.error.item.doesnotexist", map.code)
             }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         response.format = 'json'
         def result = controller.apiDeleteResource()
     }
@@ -299,7 +315,7 @@ class StorageControllerTests {
         controller.apiService = mockWith(ApiService) {
             requireApi(1..1) { req, resp -> true }
         }
-        params.resourcePath = 'abc'
+        params.resourcePath = '/keys/abc'
         def result = controller.apiDeleteResource()
         assertEquals(204,response.status)
     }
@@ -316,10 +332,10 @@ class StorageControllerTests {
             requireApi(1..1) { req, resp -> true }
             renderErrorFormat { resp, map ->
                 assertEquals(500, map.status)
-                assertEquals("Resource was not deleted: abc/test1", map.message)
+                assertEquals("Resource was not deleted: /keys/abc/test1", map.message)
             }
         }
-        params.resourcePath = 'abc/test1'
+        params.resourcePath = '/keys/abc/test1'
         def result = controller.apiDeleteResource()
     }
     @Test
@@ -340,7 +356,7 @@ class StorageControllerTests {
                 assertEquals("failed", map.message)
             }
         }
-        params.resourcePath = 'abc/test1'
+        params.resourcePath = '/keys/abc/test1'
         def result = controller.apiDeleteResource()
     }
 

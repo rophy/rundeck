@@ -1,11 +1,11 @@
 /*
- * Copyright 2010 DTO Labs, Inc. (http://dtolabs.com)
+ * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *        http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,9 +24,9 @@
 package com.dtolabs.rundeck.jetty.jaas;
 
 import org.apache.log4j.Logger;
-import org.eclipse.jetty.plus.jaas.callback.ObjectCallback;
-import org.eclipse.jetty.plus.jaas.spi.AbstractLoginModule;
-import org.eclipse.jetty.plus.jaas.spi.UserInfo;
+import org.eclipse.jetty.jaas.callback.ObjectCallback;
+import org.eclipse.jetty.jaas.spi.AbstractLoginModule;
+import org.eclipse.jetty.jaas.spi.UserInfo;
 import org.eclipse.jetty.util.log.Log;
 import org.eclipse.jetty.util.security.Credential;
 
