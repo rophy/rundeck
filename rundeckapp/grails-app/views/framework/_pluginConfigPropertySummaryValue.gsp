@@ -27,10 +27,11 @@
         code: (messagePrefix?:'')+'property.' + prop.name + '.description',
         default: prop.description
 )}"/>
+<g:set var="propdesc" value="${g.textFirstLine(text: propDescription)}"/>
 <g:if test="${prop.type.toString()=='Boolean'}">
     <g:if test="${values[prop.name]=='true'}">
         <span class="configpair">
-            <span title="${enc(attr: propDescription)}"><stepplugin:message
+            <span title="${enc(attr: propdesc)}"><stepplugin:message
                     service="${service}"
                     name="${provider}"
                     code="${messagePrefix}property.${prop.name}.title"
@@ -42,7 +43,7 @@
 <g:elseif test="${prop.renderingOptions?.(StringRenderingConstants.DISPLAY_TYPE_KEY) in [StringRenderingConstants.DisplayType.PASSWORD, 'PASSWORD']}">
     <g:if test="${values[prop.name]}">
     <span class="configpair">
-        <span title="${enc(attr: propDescription)}"><stepplugin:message
+        <span title="${enc(attr: propdesc)}"><stepplugin:message
                 service="${service}"
                 name="${provider}"
                 code="${messagePrefix}property.${prop.name}.title"
@@ -52,22 +53,25 @@
     </g:if>
 </g:elseif>
 <g:elseif test="${prop.renderingOptions?.(StringRenderingConstants.DISPLAY_TYPE_KEY) in [StringRenderingConstants.DisplayType.CODE, 'CODE']}">
-    <g:set var="rkey" value="${rkey?:g.rkey()}"/>
+    <g:set var="rakey" value="${g.rkey()}"/>
     <g:set var="script" value="${values[prop.name]}"/>
     <g:set var="split" value="${script.split('(\r?\n)') as List}"/>
+
     <span class="configpair">
-        <span title="${enc(attr: propDescription)}"><stepplugin:message
+        <span title="${enc(attr: propdesc)}"><stepplugin:message
                 service="${service}"
                 name="${provider}"
                 code="${messagePrefix}property.${prop.name}.title"
                 default="${prop.title ?: prop.name}"/>:</span>
-        <g:expander key="${rkey}"><g:enc>${label ? label : ''}</g:enc>[${split.size()} lines]</g:expander>
-        <div class="scriptContent expanded apply_ace" id="${enc(attr:rkey)}" style="display: none;"><g:enc>${script}</g:enc></div>
+        <g:collapser key="${rakey}"><g:enc>${label ? label : ''}</g:enc>${split.size()} lines</g:collapser>
+        <div class="collapse collapse-expandable" id="${enc(attr:rakey)}">
+        <div class="scriptContent apply_ace" ><g:enc>${script}</g:enc></div>
+        </div>
     </span>
 </g:elseif>
 <g:elseif test="${values[prop.name]}">
     <span class="configpair">
-        <span title="${enc(attr: propDescription)}"><stepplugin:message
+        <span title="${enc(attr: propdesc)}"><stepplugin:message
                 service="${service}"
                 name="${provider}"
                 code="${messagePrefix}property.${prop.name}.title"

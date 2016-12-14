@@ -272,12 +272,15 @@ public class ExpandRunServer {
             final File libdir = new File(serverdir, "lib");
             DEBUG("Extracting libs to: " + libdir.getAbsolutePath() + " ... ");
             deleteExistingJarsInDir(libdir, "^rundeck.*");
+            deleteExistingJarsInDir(libdir, "^jetty-all-7\\.6\\.0.*");
+            deleteExistingJarsInDir(libdir, "^servlet-api-2\\.5.*");
             extractLibs(libdir);
             extractJettyLibs(libdir);
             final File expdir = new File(serverdir, "exp");
             DEBUG("Extracting webapp to: " + expdir.getAbsolutePath() + " ... ");
 
             deleteExistingJarsInDir(new File(expdir, "webapp/WEB-INF/lib"), "^rundeck.*");
+            deleteExistingJarsInDir(new File(expdir, "webapp/WEB-INF/lib"), "^h2-.*");
             extractWar(expdir);
             
             DEBUG("Extracting bin scripts to: " + bindir.getAbsolutePath() + " ... ");

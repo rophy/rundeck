@@ -744,7 +744,12 @@ Identification
 
 Input Type
 
-:   Choose between "Plain", "Secure" and "Secure Remote Authentication". For input types other than "Plain", the multi-valued option will be disabled.
+:   Choose between "Plain", "Date", "Secure" and "Secure Remote Authentication". For input types other than "Plain", the multi-valued option will be disabled.
+
+Date Format
+
+:   If "Date" Input Type is chosen, you can enter a date format to use when selecting the date
+in the user interface. Using the [momentjs format](http://momentjs.com/docs/#/displaying/format/).
 
 Default Value
 
@@ -876,28 +881,25 @@ fi
 **Escaping Replacement Token:**
 
 If you want to use the `@` char in a way that looks like a replacement token
-you can escape it using `\` backslash.
+you can escape it using `@@`, i.e. doubling it.
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.bash}
 # escaping of @ sign to avoid expansion before the @option.domain@
-email="user\@mail.@option.domain@"
+email="user@@mail.@option.domain@"
 
-# If the first @ sign comes right before the token, it will work as expected
-email="user@@option.domain@"
-
-# or you can explicitly escape the first @ sign
-email="user\@@option.domain@"
+# If the first @ sign comes right before the token, use three @
+email="user@@@option.domain@"
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~  
 
-In this example, the `@@option.domain@` will result in `@mydomain`,
-and `\@mail.@option.domain2@` will result in `@mail.mydomain`.
+In this example, the `@@@option.domain@` will result in `@mydomain`,
+and `@@mail.@option.domain2@` will result in `@mail.mydomain`.
 
 If you do not escape the `@` in the second example, then `@mail.@`
 will be expanded to a missing value, resulting in a blank string.
 
 You do not need to escape the `@` sign in all cases, only when it might look
 like an expansion token.  If there are any whitespace characters
-before the next `@` sign it will not be expanded.
+before the next `@` sign, it does not need to be escaped:
 
 ~~~~ {.bash}
 # first @ sign does not need to be escaped
@@ -1349,11 +1351,6 @@ would type at the terminal on the remote hosts.
 
 ![Command step type](../figures/fig0404.png)
 
-This is similar to calling the command with [dispatch]:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.bash}
-dispatch [filter-options] -- command
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 
 ### Script step
 
@@ -1361,14 +1358,6 @@ Execute the supplied shell script content. Optionally, can pass an
 argument to the script specified in the lower text field.
 
 ![Script step type](../figures/fig0405.png)
-
-This is similar to calling the command with [dispatch]:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.bash}
-dispatch [filter-options] --stdin -- args <<EOF 
-script content here 
-EOF
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ### Script file step
 
@@ -1379,12 +1368,6 @@ lower text field.
 ![Script file step type](../figures/fig0406.png)
 
 
-This is similar to calling the script file with `dispatch`:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.bash}
-dispatch [filter-options] -s scriptfile -- args
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 ### Script URL step
 
 Downloads a script from a URL, and executes it to the filtered Node
@@ -1393,12 +1376,6 @@ lower text field.
 
 ![Script URL step type](../figures/fig0406.png)
 
-
-This is similar to calling the script URL with `dispatch`:
-
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ {.bash}
-dispatch [filter-options] -u URL -- args
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The URL can contain [Context Variables](#context-variables) that will be expanded at runtime.
 
@@ -1660,6 +1637,8 @@ Context variables can be used in a few ways in a Job step, with slightly differe
     :     `@ctx.name@`
 
     > Note, The "Inline Script Content" variable expansion is **not** available for "Script File" steps.  The Script File is not rewritten at all when used for execution.
+
+    > Note: This can be disabled, see [Administrator Guide > Configuration File Reference > framework.properties](../administration/configuration-file-reference.html#framework.properties).
 
 * Environment Variables (*see note*)
 

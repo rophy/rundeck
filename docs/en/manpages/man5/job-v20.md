@@ -11,18 +11,20 @@ current Rundeck "jobs" XML.
 
 ## Loading and unloading
 
-This file can be batch loaded via [rd-jobs] load command:
+This file can be batch loaded via [rd] jobs load command:
 
 ~~~~~~~~ {.bash}
-rd-jobs load -p project --file /path/to/jobs.xml
+rd jobs load -p project --file /path/to/jobs.xml
 ~~~~~~~~ 
 
 Rundeck job definitions can be dumped and saved to a file via
-rd-jobs list command:
+rd jobs list command:
 
 ~~~~~~~~ {.bash}
-rd-jobs list -p project --file /tmp/jobs.xml
+rd jobs list -p project --file /tmp/jobs.xml
 ~~~~~~~~ 
+
+[rd]: https://rundeck.github.io/rundeck-cli/
 
 # joblist 
 
@@ -578,6 +580,14 @@ valueExposed
 storagePath
 
 :    for a secure option, a storage path to password value to use as default
+
+isDate
+
+:    "true/false" - the option should display as a date/time input field
+
+dateFormat
+
+:    The date/time format to use in the UI. Using the [momentjs format](http://momentjs.com/docs/#/displaying/format/).
 
 *Example*
 
@@ -1155,15 +1165,15 @@ Defines email, webhook or plugin notifications for Job success and failure, with
 
 *Nested elements*
 
-[onsuccess](#onsuccess)
+[onsuccess][]
 
 :    define notifications for success result
 
-[onfailure](#onfailure)
+[onfailure][]
 
 :    define notifications for failure/kill result
 
-[onstart](#onstart)
+[onstart][]
 
 :    define notifications for job start
 
@@ -1226,10 +1236,6 @@ Embed an [plugin](#plugin) element to perform a custom action, within
 
 Define email recipients for Job execution result, within [onsuccess][], [onfailure][] or [onstart][].
 
-[onsuccess]: #onsuccess
-[onfailure]: #onfailure
-[onstart]: #onstart
-
 *Attributes*
 
 recipients
@@ -1244,9 +1250,6 @@ recipients
 
 Define URLs to submit a HTTP POST to containing the job execution result, within [onsuccess][], [onfailure][] or [onstart][].
 
-[onsuccess]: #onsuccess
-[onfailure]: #onfailure
-[onstart]: #onstart
 
 *Attributes*
 
@@ -1266,10 +1269,6 @@ urls
 ### plugin
 
 Defines a configuration for a plugin to perform a Notification, within [onsuccess][], [onfailure][] or [onstart][].
-
-[onsuccess]: #onsuccess
-[onfailure]: #onfailure
-[onstart]: #onstart
 
 *Attributes*
 
@@ -1328,3 +1327,8 @@ value
 
 The Rundeck source code and all documentation may be downloaded from
 <https://github.com/rundeck/rundeck/>.
+
+
+[onsuccess]: #onsuccess
+[onfailure]: #onfailure
+[onstart]: #onstart

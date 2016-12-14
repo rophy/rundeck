@@ -590,15 +590,17 @@ class ScheduledExecutionControllerTests  {
             fwkControl.demand.getNodeStepPluginDescriptions { [] }
             fwkControl.demand.getStepPluginDescriptions { [] }
             sec.frameworkService = fwkControl.createMock()
-            def seServiceControl = mockFor(ScheduledExecutionService, true)
 
-            seServiceControl.demand.getByIDorUUID {id -> return se }
-        seServiceControl.demand._dosave { params, authctx, changeinfo ->
-                [success: false]
+            sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
+
+                _dosave { params, authctx, changeinfo ->
+                    [success: false]
+                }
+//                getByIDorUUID {id -> return se }
+//                logJobChange {changeinfo, properties ->}
+                issueJobChangeEvent {event->}
+                getWorkflowStrategyPluginDescriptions{->[]}
             }
-            seServiceControl.demand.logJobChange {changeinfo, properties ->}
-        seServiceControl.demand.issueJobChangeEvent {event->}
-            sec.scheduledExecutionService = seServiceControl.createMock()
             def nServiceControl = mockFor(NotificationService, true)
             nServiceControl.demand.listNotificationPlugins { []}
             sec.notificationService = nServiceControl.createMock()
@@ -655,13 +657,13 @@ class ScheduledExecutionControllerTests  {
             sec.frameworkService = fwkControl.createMock()
             def seServiceControl = mockFor(ScheduledExecutionService, true)
 
-            seServiceControl.demand.getByIDorUUID {id -> return se }
-        seServiceControl.demand._dosave { params, authctx, changeinfo ->
-                [success: false,unauthorized:true,error:'unauthorizedMessage']
+            sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
+                _dosave { params, authctx, changeinfo ->
+                    [success: false,unauthorized:true,error:'unauthorizedMessage']
+                }
+                issueJobChangeEvent {event->}
+                getWorkflowStrategyPluginDescriptions{->[]}
             }
-            seServiceControl.demand.logJobChange {changeinfo, properties ->}
-            seServiceControl.demand.issueJobChangeEvent {event->}
-            sec.scheduledExecutionService = seServiceControl.createMock()
 
             def nServiceControl = mockFor(NotificationService, true)
             nServiceControl.demand.listNotificationPlugins { [] }
@@ -789,6 +791,7 @@ class ScheduledExecutionControllerTests  {
         controller.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID(2..2) { id -> return se }
             nextExecutionTime{jobdef->null}
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2236,9 +2239,11 @@ class ScheduledExecutionControllerTests  {
             sec.frameworkService = fwkControl.createMock()
             def seServiceControl = mockFor(ScheduledExecutionService, true)
 
-            seServiceControl.demand.getByIDorUUID { id -> return se }
-            seServiceControl.demand.userAuthorizedForJob { user, schedexec, framework -> return true }
-            sec.scheduledExecutionService = seServiceControl.createMock()
+            sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
+                getByIDorUUID{id->se}
+                getWorkflowStrategyPluginDescriptions{->[]}
+                userAuthorizedForJob { user, schedexec, framework -> return true }
+            }
 
 			def oServiceControl = mockFor(OrchestratorPluginService, true)
 			oServiceControl.demand.listDescriptions{[]}
@@ -2307,6 +2312,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2404,6 +2410,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2501,6 +2508,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2598,6 +2606,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2694,6 +2703,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 
@@ -2817,6 +2827,7 @@ class ScheduledExecutionControllerTests  {
         sec.scheduledExecutionService = mockWith(ScheduledExecutionService){
             getByIDorUUID { id -> return se }
             nextExecutionTime { job -> null }
+            getWorkflowStrategyPluginDescriptions{->[]}
             userAuthorizedForJob { user, schedexec, framework -> return true }
         }
 

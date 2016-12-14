@@ -93,6 +93,29 @@
             </div>
         </div>
     </div>
+
+    <div class="form-group" >
+            <label class="col-sm-2 control-label ">
+                <g:message code="scheduledExecution.property.nodeIntersect.label"/>
+            </label>
+
+            <div class="col-sm-10">
+                <div class="radio">
+                    <label >
+                        <g:radio name="nodeIntersect" value="" checked="${item?.nodeIntersect==null}"/>
+                        <g:message code="scheduledExecution.property.nodeIntersect.false"/>
+                    </label>
+                </div>
+
+                <div class="radio">
+                    <label>
+                        <g:radio name="nodeIntersect" value="true" checked="${item?.nodeIntersect!=null&&item?.nodeIntersect}"/>
+                        <g:message code="scheduledExecution.property.nodeIntersect.true"/>
+                    </label>
+                </div>
+            </div>
+    </div>
+
     <div class="form-group">
 
         <label class="col-sm-2 control-label" for="nodeFilterField${enc(attr: rkey)}">
@@ -569,11 +592,11 @@
 <g:else>
     <div class="form-group">
         <label class="col-sm-2 control-label" for="description${rkey}"><g:message
-                code="workflow.step.description"/></label>
+                code="Workflow.step.property.description.label"/></label>
         <div class="col-sm-10">
         <input id="description${rkey}" type="text" name="description" value="${enc(attr:item?.description)}"
                class="form-control"
-               placeholder="${message(code: "workflow.step.description.placeholder")}"
+               placeholder="${message(code: "Workflow.step.property.description.placeholder")}"
                size="100"/>
         </div>
     </div>

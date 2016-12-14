@@ -36,10 +36,11 @@ import com.dtolabs.rundeck.core.logging.LogLevel
 import com.dtolabs.rundeck.core.utils.NodeSet
 import com.dtolabs.rundeck.core.utils.OptsUtil
 import com.dtolabs.rundeck.core.utils.ThreadBoundOutputStream
-import com.dtolabs.rundeck.execution.ExecutionItemFactory
 import com.dtolabs.rundeck.execution.JobExecutionItem
 import com.dtolabs.rundeck.execution.JobReferenceFailureReason
+import com.dtolabs.rundeck.plugins.scm.JobChangeEvent
 import com.dtolabs.rundeck.server.authorization.AuthConstants
+import grails.events.Listener
 import org.apache.commons.io.FileUtils
 import org.apache.log4j.Logger
 import org.apache.log4j.MDC
@@ -67,6 +68,8 @@ import java.text.DateFormat
 import java.text.MessageFormat
 import java.text.ParseException
 import java.text.SimpleDateFormat
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 import java.util.regex.Pattern
 
 /**
@@ -97,6 +100,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
     def grailsApplication
     def configurationService
     def grailsEvents
+    def executionUtilService
 
     static final ThreadLocal<DateFormat> ISO_8601_DATE_FORMAT_WITH_MS =
         new ThreadLocal<DateFormat>() {
@@ -775,7 +779,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
 
     public logExecution(uri,project,user,issuccess,statusString,execId,Date startDate=null, jobExecId=null, jobName=null,
                         jobSummary=null,iscancelled=false,istimedout=false,willretry=false, nodesummary=null,
-                        abortedby=null){
+                        abortedby=null, succeededNodeList=null, failedNodeList=null, filter=null){
 
         def reportMap=[:]
         def internalLog = org.apache.log4j.Logger.getLogger("ExecutionService")
@@ -800,6 +804,16 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         }else{
             reportMap.reportId='adhoc'
             reportMap.adhocExecution = true
+        }
+
+        if(succeededNodeList){
+            reportMap.succeededNodeList = succeededNodeList
+        }
+        if(failedNodeList){
+            reportMap.failedNodeList = failedNodeList
+        }
+        if(filter){
+            reportMap.filterApplied = filter
         }
         reportMap.ctxProject=project
 
@@ -840,6 +854,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             jobcontext.id = execution.scheduledExecution.extid
         }
         jobcontext.execid = execution.id.toString()
+        jobcontext.executionType = execution.executionType
         jobcontext.serverUrl = generateServerURL(grailsLinkGenerator)
         jobcontext.url = generateExecutionURL(execution,grailsLinkGenerator)
         jobcontext.serverUUID = execution.serverNodeUUID
@@ -890,7 +905,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             def jobcontext=exportContextForExecution(execution,grailsLinkGenerator)
             loghandler.openStream()
 
-            WorkflowExecutionItem item = createExecutionItemForExecutionContext(execution, framework, execution.user)
+            WorkflowExecutionItem item = executionUtilService.createExecutionItemForWorkflow(execution.workflow)
 
             NodeRecorder recorder = new NodeRecorder();//TODO: use workflow-aware listener for nodes
 
@@ -1053,52 +1068,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         return levels.indexOf(loglevel)
     }
 
-    /**
-     * Return an appropriate StepExecutionItem object for the stored Execution
-     */
-    public WorkflowExecutionItem createExecutionItemForExecutionContext(ExecutionContext execution, Framework framework, String user=null) {
-        WorkflowExecutionItem item
-        if (execution.workflow) {
-            item = createExecutionItemForWorkflowContext(execution, framework,user)
-        } else {
-            throw new RuntimeException("unsupported job type")
-        }
-        return item
-    }
 
-
-    /**
-     * Return an WorkflowExecutionItem instance for the given workflow Execution,
-     * suitable for the ExecutionService layer
-     */
-    public WorkflowExecutionItem createExecutionItemForWorkflowContext(
-            ExecutionContext execMap,
-            Framework framework,
-            String userName=null
-    )
-    {
-        if (!execMap.workflow.commands || execMap.workflow.commands.size() < 1) {
-            throw new Exception("Workflow is empty")
-        }
-        if (!userName) {
-            userName = execMap.user
-        }
-
-        final WorkflowExecutionItemImpl item = new WorkflowExecutionItemImpl(
-            new WorkflowImpl(
-                    execMap.workflow.commands.collect {
-                        itemForWFCmdItem(
-                                it,
-                                it.errorHandler?itemForWFCmdItem(it.errorHandler):null
-                        )
-                    },
-                    execMap.workflow.threadcount,
-                    execMap.workflow.keepgoing,
-                    execMap.workflow.strategy?execMap.workflow.strategy: "node-first"
-            )
-        )
-        return item
-    }
 
     public static String EXECUTION_RUNNING = "running"
     public static String EXECUTION_SUCCEEDED = "succeeded"
@@ -1115,99 +1085,6 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
 
     public static String getExecutionState(Execution e) {
         e.executionState
-    }
-
-    public StepExecutionItem itemForWFCmdItem(final WorkflowStep step,final StepExecutionItem handler=null) throws FileNotFoundException {
-        if(step instanceof CommandExec || step.instanceOf(CommandExec)){
-            CommandExec cmd=step.asType(CommandExec)
-            if (null != cmd.getAdhocRemoteString()) {
-
-                final List<String> strings = OptsUtil.burst(cmd.getAdhocRemoteString());
-                final String[] args = strings.toArray(new String[strings.size()]);
-
-                return ExecutionItemFactory.createExecCommand(args, handler, !!cmd.keepgoingOnSuccess);
-
-            } else if (null != cmd.getAdhocLocalString()) {
-                final String script = cmd.getAdhocLocalString();
-                final String[] args;
-                if (null != cmd.getArgString()) {
-                    final List<String> strings = OptsUtil.burst(cmd.getArgString());
-                    args = strings.toArray(new String[strings.size()]);
-                } else {
-                    args = new String[0];
-                }
-                return ExecutionItemFactory.createScriptFileItem(
-                        cmd.getScriptInterpreter(),
-                        cmd.getFileExtension(),
-                        !!cmd.interpreterArgsQuoted,
-                        script,
-                        args,
-                        handler,
-                        !!cmd.keepgoingOnSuccess);
-
-            } else if (null != cmd.getAdhocFilepath()) {
-                final String filepath = cmd.getAdhocFilepath();
-                final String[] args;
-                if (null != cmd.getArgString()) {
-                    final List<String> strings = OptsUtil.burst(cmd.getArgString());
-                    args = strings.toArray(new String[strings.size()]);
-                } else {
-                    args = new String[0];
-                }
-                if(filepath ==~ /^(?i:https?|file):.*$/) {
-                    return ExecutionItemFactory.createScriptURLItem(
-                            cmd.getScriptInterpreter(),
-                            cmd.getFileExtension(),
-                            !!cmd.interpreterArgsQuoted,
-                            filepath,
-                            args,
-                            handler,
-                            !!cmd.keepgoingOnSuccess)
-                }else {
-                    return ExecutionItemFactory.createScriptFileItem(
-                            cmd.getScriptInterpreter(),
-                            cmd.getFileExtension(),
-                            !!cmd.interpreterArgsQuoted,
-                            new File(filepath),
-                            args,
-                            handler,
-                            !!cmd.keepgoingOnSuccess);
-
-                }
-            }
-        }else if (step instanceof JobExec || step.instanceOf(JobExec)) {
-            final JobExec jobcmditem = step as JobExec;
-
-            final String[] args;
-            if (null != jobcmditem.getArgString()) {
-                final List<String> strings = OptsUtil.burst(jobcmditem.getArgString());
-                args = strings.toArray(new String[strings.size()]);
-            } else {
-                args = new String[0];
-            }
-
-            return ExecutionItemFactory.createJobRef(
-                    jobcmditem.getJobIdentifier(),
-                    args,
-                    !!jobcmditem.nodeStep,
-                    handler,
-                    !!jobcmditem.keepgoingOnSuccess,
-                    jobcmditem.nodeFilter?:null,
-                    jobcmditem.nodeThreadcount!=null && jobcmditem.nodeThreadcount>=1?jobcmditem.nodeThreadcount:null,
-                    jobcmditem.nodeKeepgoing,
-                    jobcmditem.nodeRankAttribute,
-                    jobcmditem.nodeRankOrderAscending
-            )
-        }else if(step instanceof PluginStep || step.instanceOf(PluginStep)){
-            final PluginStep stepitem = step as PluginStep
-            if(stepitem.nodeStep){
-                return ExecutionItemFactory.createPluginNodeStepItem(stepitem.type, stepitem.configuration, !!stepitem.keepgoingOnSuccess, handler)
-            }else{
-                return ExecutionItemFactory.createPluginStepItem(stepitem.type,stepitem.configuration, !!stepitem.keepgoingOnSuccess,handler)
-            }
-        } else {
-            throw new IllegalArgumentException("Workflow step type was not expected: "+step);
-        }
     }
 
     /**
@@ -1553,21 +1430,22 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         def Execution execution
         if (params.project && params.workflow) {
             execution = new Execution(project:params.project,
-                                      user:params.user,loglevel:params.loglevel,
-                                    doNodedispatch:params.doNodedispatch?"true" == params.doNodedispatch.toString():false,
-                                    filter: params.filter,
-                                    nodeExcludePrecedence:params.nodeExcludePrecedence,
-                                    nodeThreadcount:params.nodeThreadcount,
-                                    nodeKeepgoing:params.nodeKeepgoing,
-                                    orchestrator:params.orchestrator,
-                                    nodeRankOrderAscending:params.nodeRankOrderAscending,
-                                    nodeRankAttribute:params.nodeRankAttribute,
-                                    workflow:params.workflow,
-                                    argString:params.argString,
-                                    timeout:params.timeout?:null,
-                                    retryAttempt:params.retryAttempt?:0,
-                                    retry:params.retry?:null,
-                                    serverNodeUUID: frameworkService.getServerUUID()
+                                      user:params.user, loglevel:params.loglevel,
+                                      doNodedispatch:params.doNodedispatch?"true" == params.doNodedispatch.toString():false,
+                                      filter: params.filter,
+                                      nodeExcludePrecedence:params.nodeExcludePrecedence,
+                                      nodeThreadcount:params.nodeThreadcount,
+                                      nodeKeepgoing:params.nodeKeepgoing,
+                                      orchestrator:params.orchestrator,
+                                      nodeRankOrderAscending:params.nodeRankOrderAscending,
+                                      nodeRankAttribute:params.nodeRankAttribute,
+                                      workflow:params.workflow,
+                                      argString:params.argString,
+                                      executionType: params.executionType ?: 'scheduled',
+                                      timeout:params.timeout?:null,
+                                      retryAttempt:params.retryAttempt?:0,
+                                      retry:params.retry?:null,
+                                      serverNodeUUID: frameworkService.getServerUUID()
             )
 
 
@@ -1700,7 +1578,10 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         input.retryAttempt = attempt
         try {
 
-            Map allowedOptions = input.subMap(['loglevel', 'argString', 'option','_replaceNodeFilters', 'filter', 'retryAttempt']).findAll { it.value != null }
+            Map allowedOptions = input.subMap(
+                    ['loglevel', 'argString', 'option', '_replaceNodeFilters', 'filter', 'executionType',
+                     'retryAttempt', 'nodeoverride', 'nodefilter']
+            ).findAll { it.value != null }
             allowedOptions.putAll(input.findAll { it.key.startsWith('option.') || it.key.startsWith('nodeInclude') || it.key.startsWith('nodeExclude') }.findAll { it.value != null })
             def Execution e = createExecution(scheduledExecution, authContext, user, allowedOptions,attempt>0,prevId)
             def timeout = 0
@@ -1758,6 +1639,8 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         try {
 
             Map allowedOptions = input.subMap(['loglevel', 'argString', 'option', '_replaceNodeFilters', 'filter',
+                                               'nodeoverride', 'nodefilter',
+                                               'executionType',
                                                'retryAttempt']).findAll { it.value != null }
             allowedOptions.putAll(input.findAll {
                         it.key.startsWith('option.') || it.key.startsWith('nodeInclude') ||
@@ -1780,7 +1663,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 }catch (ParseException e1){
                     startTime	= ISO_8601_DATE_FORMAT_WITH_MS.get().parse(input.runAtTime)
                 }
-            } catch (ParseException | IllegalArgumentException e) {
+            } catch (ParseException | IllegalArgumentException z) {
                 return [success: false, failed: true, error: 'failed',
                         message: 'Invalid date/time format, only ISO 8601 is supported',
                         options: input.option]
@@ -1868,17 +1751,28 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             props.user = runAsUser
         }
         if (input && 'true' == input['_replaceNodeFilters']) {
-            //remove all existing node filters to replace with input filters
-            props = props.findAll {!(it.key =~ /^(filter|node(Include|Exclude).*)$/)}
+            if('filter' == input.nodeoverride){
+                input.filter = input.nodefilter
+                input.doNodedispatch = true
+            }else{
+                //remove all existing node filters to replace with input filters
+                props = props.findAll {!(it.key =~ /^(filter|node(Include|Exclude).*)$/)}
 
-            def filterprops = input.findAll { it.key =~ /^(filter|node(Include|Exclude).*)$/ }
-            def nset = filtersAsNodeSet(filterprops)
-            input.filter = NodeSet.generateFilter(nset)
-            input.doNodedispatch=true
+                def filterprops = input.findAll { it.key =~ /^(filter|node(Include|Exclude).*)$/ }
+                def nset = filtersAsNodeSet(filterprops)
+                input.filter = NodeSet.generateFilter(nset)
+                input.doNodedispatch=true
+            }
         }
         if (input) {
             props.putAll(input.subMap(['argString','filter','loglevel','retryAttempt','doNodedispatch']).findAll{it.value!=null})
             props.putAll(input.findAll{it.key.startsWith('option.') && it.value!=null})
+        }
+
+        if (input && input['executionType']) {
+            props.executionType = input['executionType']
+        } else {
+            props.executionType = 'scheduled'
         }
 
         //evaluate embedded Job options for validation
@@ -1935,6 +1829,29 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         return execution
     }
     /**
+     * sync objects for preventing multiple executions of a job within this server
+     */
+    ConcurrentMap<String, Object> multijobflag = new ConcurrentHashMap<String, Object>()
+
+    /**
+     * Return an object for synchronization of the job id
+     * @param id
+     * @return object
+     */
+    private Object syncForJob(String id){
+        def object = new Object()
+        //return existing object if present, or the new object
+        multijobflag.putIfAbsent(id, object) ?: object
+    }
+
+    @Listener
+    def jobChanged(StoredJobChangeEvent e) {
+        if (e.eventType == JobChangeEvent.JobChangeEventType.DELETE) {
+            //clear multijob sync object
+            multijobflag?.remove(e.originalJobReference.id)
+        }
+    }
+    /**
      * Create an execution
      * @param se
      * @param user
@@ -1954,7 +1871,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             throws ExecutionServiceException
     {
         if (!se.multipleExecutions ) {
-            synchronized (this) {
+            synchronized (syncForJob(se.extid)) {
                 //find any currently running executions for this job, and if so, throw exception
                 def found = Execution.withCriteria {
                     isNull('dateCompleted')
@@ -2257,9 +2174,10 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 if (maxRetries > count) {
                     execution.willRetry = true
                     def input = [
-                            argString: execution.argString,
-                            loglevel : execution.loglevel,
-                            filter   : execution.filter //TODO: failed nodes?
+                            argString    : execution.argString,
+                            executionType: execution.executionType,
+                            loglevel     : execution.loglevel,
+                            filter       : execution.filter //TODO: failed nodes?
                     ]
                     def result = retryExecuteJob(scheduledExecution, retryContext.authContext,
                             retryContext.user, input, retryContext.secureOpts,
@@ -2317,7 +2235,10 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                         props.timedOut,
                         execution.willRetry,
                         node,
-                        execution.abortedby
+                        execution.abortedby,
+                        execution.succeededNodeList,
+                        execution.failedNodeList,
+                        execution.filter
                 )
                 logExecutionLog4j(execution, "finish", execution.user)
 
@@ -2599,20 +2520,21 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
      * @return
      */
     StepExecutionContext overrideJobReferenceNodeFilter(
-            Map<String,Map<String,String>> origData,
             StepExecutionContext origContext,
+            StepExecutionContext newContext,
             String nodeFilter,
             Integer nodeThreadcount,
             Boolean nodeKeepgoing,
             String nodeRankAttribute,
-            Boolean nodeRankOrderAscending
+            Boolean nodeRankOrderAscending,
+            Boolean nodeIntersect
     )
     {
-        def builder = ExecutionContextImpl.builder(origContext);
+        def builder = ExecutionContextImpl.builder(newContext);
         def nodeselector
         if (nodeFilter) {
             //set nodeset for the context if doNodedispatch parameter is true
-            def filter = DataContextUtils.replaceDataReferences(nodeFilter, origData)
+            def filter = DataContextUtils.replaceDataReferences(nodeFilter, origContext.dataContext)
             NodeSet nodeset = filtersAsNodeSet([
                     filter               : filter,
                     nodeExcludePrecedence: true, //XXX: fix
@@ -2621,11 +2543,24 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             ])
             nodeselector = nodeset
 
-            def INodeSet nodeSet = frameworkService.filterAuthorizedNodes(
-                    origContext.frameworkProject,
+            def INodeSet nodeSet
+            if(null!=nodeIntersect && nodeIntersect){
+                // Create intersection of overridden node filter and upstream job nodes
+                nodeSet = com.dtolabs.rundeck.core.common.NodeFilter.filterNodes(nodeselector, origContext.nodes)
+                filter = DataContextUtils.replaceDataReferences(nodeSet.nodeNames.join(" "), origContext.dataContext)
+                nodeselector = filtersAsNodeSet([
+                        filter                  : filter,
+                        nodeExcludePrecedence   : true,
+                        nodeThreadcount      : nodeThreadcount?:1,
+                        nodeKeepgoing        : nodeKeepgoing
+                ])
+            }
+
+            nodeSet = frameworkService.filterAuthorizedNodes(
+                    newContext.frameworkProject,
                     new HashSet<String>(["read", "run"]),
-                    frameworkService.filterNodeSet(nodeselector, origContext.frameworkProject),
-                    origContext.authContext);
+                    frameworkService.filterNodeSet(nodeselector, newContext.frameworkProject),
+                    newContext.authContext);
 
             builder.nodeSelector(nodeselector).nodes(nodeSet)
 
@@ -2641,6 +2576,24 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             if (null != nodeRankOrderAscending) {
                 builder.nodeRankOrderAscending(nodeRankOrderAscending)
             }
+        }else if(null!=nodeIntersect && nodeIntersect){
+            // Create intersection of referenced job node filter and upstream job nodes
+            def INodeSet nodeSet = com.dtolabs.rundeck.core.common.NodeFilter.filterNodes(newContext.nodeSelector, origContext.nodes)
+            def filter = DataContextUtils.replaceDataReferences(nodeSet.nodeNames.join(" "), origContext.dataContext)
+            nodeselector = filtersAsNodeSet([
+                    filter                  : filter,
+                    nodeExcludePrecedence   : true,
+                    nodeThreadcount      : newContext.threadCount,
+                    nodeKeepgoing        : newContext.keepgoing
+            ])
+
+            nodeSet = frameworkService.filterAuthorizedNodes(
+                    newContext.frameworkProject,
+                    new HashSet<String>(["read", "run"]),
+                    frameworkService.filterNodeSet(nodeselector, newContext.frameworkProject),
+                    newContext.authContext);
+
+            builder.nodeSelector(nodeselector).nodes(nodeSet)
         }
 
         return builder.build()
@@ -2669,6 +2622,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             Integer nodeThreadcount,
             String nodeRankAttribute,
             Boolean nodeRankOrderAscending,
+            Boolean nodeIntersect = false,
             dovalidate = true
     )
     throws ExecutionServiceValidationException
@@ -2765,15 +2719,16 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 evalSecOpts
         )
 
-        if (null != newContext && nodeFilter) {
+        if (null != newContext && (nodeFilter || nodeIntersect)) {
             newContext = overrideJobReferenceNodeFilter(
-                    executionContext.dataContext,
+                    executionContext,
                     newContext,
                     nodeFilter,
                     nodeThreadcount,
                     nodeKeepgoing,
                     nodeRankAttribute,
-                    nodeRankOrderAscending
+                    nodeRankOrderAscending,
+                    nodeIntersect
             )
         }
         return newContext
@@ -2840,7 +2795,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 result = createFailure(JobReferenceFailureReason.Unauthorized, msg)
                 return
             }
-            newExecItem = createExecutionItemForExecutionContext(se, executionContext.getFramework(), executionContext.getUser())
+            newExecItem = executionUtilService.createExecutionItemForWorkflow(se.workflow)
 
             try {
                 newContext = createJobReferenceContext(
@@ -2852,7 +2807,8 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                         jitem.nodeKeepgoing,
                         jitem.nodeThreadcount,
                         jitem.nodeRankAttribute,
-                        jitem.nodeRankOrderAscending
+                        jitem.nodeRankOrderAscending,
+                        jitem.nodeIntersect
                 )
             } catch (ExecutionServiceValidationException e) {
                 executionContext.getExecutionListener().log(0, "Option input was not valid for [${jitem.jobIdentifier}]: ${e.message}");

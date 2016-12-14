@@ -1,15 +1,17 @@
-Release 2.6.11
+Release 2.7.1
 ===========
 
-Date: 2016-11-15
+Date: 2016-12-02
 
-Name: <span style="color: Magenta"><span class="glyphicon glyphicon-knight"></span> "cafe bonbon magenta knight"</span>
+Name: <span style="color: SteelBlue"><span class="glyphicon glyphicon-leaf"></span> "cafecito steelblue leaf"</span>
 
-## Note
+## Upgrading from 2.6
 
-This release is primarily to fix an upgrade issue for 2.6.9 and earlier.
+* See the [Upgrading Guide](http://rundeck.org/docs/upgrading/index.html)
 
-Refer to the [2.6.10 release notes for more changes since 2.6.9](http://rundeck.org/docs/history/version-2.6.10.html).
+## Notes
+
+This is a bugfix release.
 
 ## Contributors
 
@@ -17,11 +19,10 @@ Refer to the [2.6.10 release notes for more changes since 2.6.9](http://rundeck.
 
 ## Bug Reporters
 
-* theduusK
-* xyntrix
+* charlescoupeau
 
 ## Issues
 
-* [Project list links to project homepage and does not respect `rundeck.gui.startpage` setting](https://github.com/rundeck/rundeck/issues/2168)
-* [Rundeck 2.6.10 upgrade breaks rundeck on CentOS](https://github.com/rundeck/rundeck/issues/2164)
+[Milestone 2.7.1](https://api.github.com/repos/rundeck/rundeck/milestones/49)
 
+* [Error start Rundeck SSL since last update 2.7.0](https://github.com/rundeck/rundeck/issues/2217)

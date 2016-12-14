@@ -172,7 +172,7 @@ function getCurSEID(){
             );
             ko.applyBindings(nodeFilter,jQuery('#nodegroupitem')[0]);
             registerNodeFilters(nodeFilter, '#nodegroupitem');
-
+            nodeSummary.reload();
             jQuery('body').on('click', '.nodefilterlink', function (evt) {
                 evt.preventDefault();
                 handleNodeFilterLink(this);
@@ -519,7 +519,8 @@ function getCurSEID(){
             <div class="${labelColSize}  control-label text-form-label"><g:message code="workflow.prompt" /></div>
             <div class="${fieldColSize}">
                 <g:set var="editwf" value="${session.editWF && session.editWF[scheduledExecution.id.toString()]?session.editWF[scheduledExecution.id.toString()]:scheduledExecution.workflow}"/>
-                <g:render template="/execution/execDetailsWorkflow" model="${[workflow:editwf,context:scheduledExecution,edit:true,error:scheduledExecution?.errors?.hasFieldErrors('workflow'),project:scheduledExecution?.project?:(params.project ?: request.project)?: projects?.size() == 1 ? projects[0].name :'']}"/>
+                <g:render template="/execution/execDetailsWorkflow" model="${[workflow:editwf,context:scheduledExecution,edit:true,error:scheduledExecution?.errors?.hasFieldErrors('workflow'),project:scheduledExecution?.project?:(params.project ?: request.project)?: projects?.size() == 1 ? projects[0].name :'',
+                                                                              strategyPlugins:strategyPlugins]}"/>
                 <g:hiddenField name="_sessionwf" value="true"/>
                 <g:if test="${null==editwf || null==editwf.commands || 0==editwf.commands.size()}">
                     <g:javascript>
@@ -681,6 +682,27 @@ function getCurSEID(){
 
     <div id="nodeDispatchFields" class="subfields ">
 
+        <div class="form-group">
+            <div class="${labelColSize} control-label text-form-label">
+                <g:message code="scheduledExecution.property.nodefiltereditable.label"/>
+            </div>
+
+            <div class="${fieldColSize}">
+                <label class="radio-inline">
+                    <g:radio value="false" name="nodeFilterEditable"
+                             checked="${!scheduledExecution.nodeFilterEditable}"
+                             id="editableFalse"/>
+                    <g:message code="no"/>
+                </label>
+
+                <label class="radio-inline">
+                    <g:radio name="nodeFilterEditable" value="true"
+                             checked="${scheduledExecution.nodeFilterEditable}"
+                             id="editableTrue"/>
+                    <g:message code="yes"/>
+                </label>
+            </div>
+        </div>
 
         <div class="form-group ${hasErrors(bean: scheduledExecution, field: 'nodeThreadcount', 'has-error')}">
             <label for="schedJobnodeThreadcount" class="${labelColClass}">

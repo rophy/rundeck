@@ -13,7 +13,7 @@
   - See the License for the specific language governing permissions and
   - limitations under the License.
   --}%
-
+<%@ page import="rundeck.User;" %>
 <div class="row">
 <div class="col-sm-12 ">
 
@@ -41,15 +41,78 @@
         </div>
     </div>
 </g:if>
+    <g:set var="project" value="${scheduledExecution?.project ?: params.project?:request.project?: projects?.size() == 1 ? projects[0].name : ''}"/>
+    <g:embedJSON id="filterParamsJSON" data="${[filterName: params.filterName, filter: query?.filter, filterAll: params.showall in ['true', true]]}"/>
+<script lang="text/javascript">
+    function init() {
+        var pageParams = loadJsonData('pageParams');
+        jQuery('body').on('click', '.nodefilterlink', function (evt) {
+            evt.preventDefault();
+            nodeFilter.selectNodeFilterLink(this);
+            $('filterradio').checked=true;
+        });
+        jQuery('#nodesContent').on('click', '.closeoutput', function (evt) {
+            evt.preventDefault();
+            closeOutputArea();
+        });
+
+
+        //setup node filters knockout bindings
+        var filterParams = loadJsonData('filterParamsJSON');
+        <g:if test="${scheduledExecution.nodeFilterEditable || nodefilter == ''}">
+        var nodeSummary = new NodeSummary({baseUrl:appLinks.frameworkNodes});
+        var nodeFilter = new NodeFilters(
+                appLinks.frameworkAdhoc,
+                appLinks.scheduledExecutionCreate,
+                appLinks.frameworkNodes,
+                Object.extend(filterParams, {
+                    nodeSummary:nodeSummary,
+                    view: 'embed',
+                    maxShown: 100,
+                    emptyMode: 'blank',
+                    project: pageParams.project,
+                    nodesTitleSingular: message('Node'),
+                    nodesTitlePlural: message('Node.plural')
+                }));
+
+            ko.applyBindings(nodeFilter, document.getElementById('nodefilterViewArea'));
+        //show selected named filter
+        nodeFilter.filterName.subscribe(function (val) {
+            if (val) {
+                jQuery('a[data-node-filter-name]').removeClass('active');
+                jQuery('a[data-node-filter-name=\'' + val + '\']').addClass('active');
+            }
+        });
+
+        nodeSummary.reload();
+        nodeFilter.updateMatchedNodes();
+
+        var tmpfilt = {};
+        jQuery.data( tmpfilt, "node-filter-name", "" );
+        jQuery.data( tmpfilt, "node-filter", "${nodefilter}" );
+        nodeFilter.selectNodeFilterLink(tmpfilt);
+
+        </g:if>
+    }
+    jQuery(document).ready(init);
+</script>
+    <div class=" collapse" id="queryFilterHelp">
+        <div class="help-block">
+            <g:render template="/common/nodefilterStringHelp"/>
+        </div>
+    </div>
 <div class="list-group list-group-tab-content">
 <div class="list-group-item">
 <div class="row">
 <div class="${hideHead?'col-sm-9':'col-sm-12'}">
     <g:render template="editOptions" model="${[scheduledExecution:scheduledExecution, selectedoptsmap:selectedoptsmap, selectedargstring:selectedargstring,authorized:authorized,jobexecOptionErrors:jobexecOptionErrors, optiondependencies: optiondependencies, dependentoptions: dependentoptions, optionordering: optionordering]}"/>
+
     <div class="form-group" style="${wdgt.styleVisible(if: nodesetvariables && !failedNodes || nodesetempty || nodes)}">
     <div class="col-sm-2 control-label text-form-label">
         <g:message code="Node.plural" />
     </div>
+
+
     <div class="col-sm-10">
         <g:if test="${nodesetvariables && !failedNodes}">
             %{--show node filters--}%
@@ -68,10 +131,11 @@
                 <g:message code="scheduledExecution.nodeset.empty.warning"/>
             </div>
         </g:elseif>
-        <g:elseif test="${nodes}">
+
+
             <g:set var="selectedNodes"
-                   value="${failedNodes? failedNodes.split(','):selectedNodes!=null? selectedNodes.length()>0? selectedNodes.split(','):false :null}"/>
-            <div class="container">
+                   value="${failedNodes? failedNodes.split(',').findAll{it}:selectedNodes!=null? selectedNodes.split(',').findAll{it}:null}"/>
+
             <div class="row">
                 <div class="col-sm-12 checkbox">
                     <label >
@@ -81,21 +145,38 @@
                            data-target="#nodeSelect"
                         ${selectedNodes!=null?'checked disabled':''}
                            id="doReplaceFilters"/>
-                    Change the Target Nodes
-                (<span class="nodeselectcount"><g:enc>${selectedNodes?selectedNodes.size():selectedNodes==false?0:nodes.size()}</g:enc></span>)</label>
-                </div>
+                    <g:message code="change.the.target.nodes" />
+                    <g:if test="${selectedNodes || nodes}">
+                        (<span class="nodeselectcount"><g:enc>${selectedNodes!=null?selectedNodes.size():nodes.size()}</g:enc></span>)
+                    </g:if>
+                    </label>
 
             </div>
-            </div>
+            <div class="container">
             <div class=" matchednodes embed jobmatchednodes group_section collapse ${selectedNodes!=null? 'in' : ''}" id="nodeSelect">
-                    <div class=" group_select_control" style="${wdgt.styleVisible(if: selectedNodes != null)}">
-                        Select:
-                        <span class="textbtn textbtn-default textbtn-on-hover selectall">All</span>
-                        <span class="textbtn textbtn-default textbtn-on-hover selectnone">None</span>
+                <%--
+                 split node names into groups, in several patterns
+                  .*\D(\d+)
+                  (\d+)\D.*
+                --%>
+                <g:if test="${!nodesetvariables && nodes}">
+                <g:if test="${namegroups}">
+                    <label for=" ">
+                    <div class=" group_select_control" style="${wdgt.styleVisible(if: selectedNodes !=null)}">
+                        <input id="cherrypickradio"
+                               type="radio"
+                               name="extra.nodeoverride"
+                                checked="checked"
+                                value="cherrypick"
+                               />
+                        <g:message code="select.prompt" /> (<span class="nodeselectcount"><g:enc>${selectedNodes!=null?selectedNodes.size():nodes.size()}</g:enc></span>)
+                        <span class="textbtn textbtn-default textbtn-on-hover selectall"><g:message code="all" /></span>
+                        <span class="textbtn textbtn-default textbtn-on-hover selectnone"><g:message code="none" /></span>
                         <g:if test="${tagsummary}">
                             <g:render template="/framework/tagsummary"
                                       model="${[tagsummary:tagsummary,action:[classnames:'tag active textbtn obs_tag_group',onclick:'']]}"/>
                         </g:if>
+
                     </div>
 		    <select multiple="multiple" name="extra.nodeIncludeName">
 			<g:each var="node" in="${nodes}" status="index">
@@ -109,6 +190,110 @@
                                 </option>
 			</g:each>
 		    </select>
+                    </label>
+
+                </g:if>
+                <g:if test="${scheduledExecution.nodeFilterEditable || nodefilter == ''}">
+                <div class="subfields nodeFilterFields ">
+                    %{-- filter text --}%
+                    <div class="">
+                        <g:set var="filtvalue" value="${nodefilter}"/>
+                        <label for="filterradio" style="display: block">
+                    <input id="filterradio"
+                           type="radio"
+                           name="extra.nodeoverride"
+                        ${(!nodesetvariables && nodes)?'':'checked=true'}
+                           value="filter"
+                    />
+                        <span>
+                    <g:if test="${!nodesetvariables && nodes}"><g:message code="or"/> </g:if>
+                            <g:message code="job.run.override.node"/>: </span>
+                    <g:if test="${session.user && User.findByLogin(session.user)?.nodefilters}">
+                        <g:set var="filterset" value="${User.findByLogin(session.user)?.nodefilters.findAll{it.project == project}}"/>
+                    </g:if>
+
+                    <div id="nodefilterViewArea">
+                        <div class="${emptyQuery ? 'active' : ''}" id="nodeFilterInline">
+                            <div class="spacing">
+                                <div class="">
+                                    <g:form action="adhoc" class="form form-horizontal" name="searchForm" >
+                                        <g:hiddenField name="max" value="${max}"/>
+                                        <g:hiddenField name="offset" value="${offset}"/>
+                                        <g:hiddenField name="formInput" value="true"/>
+
+
+
+                                        <div class="form-group">
+                                            <div class="col-sm-10">
+                                                <span class=" input-group" >
+                                                    <g:render template="/framework/nodeFilterInputGroup"
+                                                              model="[filterFieldName: 'extra.nodefilter',filterset: filterset, filtvalue: filtvalue, filterName: filterName]"/>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </g:form>
+
+                                    <div class=" collapse" id="queryFilterHelp">
+                                        <div class="help-block">
+                                            <g:render template="/common/nodefilterStringHelp"/>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="row row-space">
+                            <div class="col-sm-10">
+                                <div class="spacing text-warning" id="emptyerror"
+                                     style="display: none"
+                                     data-bind="visible: !loading() && !error() && (!total() || total()==0)">
+                                    <span class="errormessage">
+                                        <g:message code="no.nodes.selected.match.nodes.by.selecting.or.entering.a.filter" />
+                                    </span>
+                                </div>
+                                <div class="spacing text-danger" id="loaderror2"
+                                     style="display: none"
+                                     data-bind="visible: error()">
+                                    <i class="glyphicon glyphicon-warning-sign"></i>
+                                    <span class="errormessage" data-bind="text: error()">
+
+                                    </span>
+                                </div>
+                                <div data-bind="visible: total()>0 || loading()" class="well well-sm inline">
+                                    <span data-bind="if: loading()" class="text-info">
+                                        <i class="glyphicon glyphicon-time"></i>
+                                        <g:message code="loading.matched.nodes" />
+                                    </span>
+                                    <span data-bind="if: !loading() && !error()">
+
+                                        <span data-bind="messageTemplate: [ total(), nodesTitle() ]"><g:message code="count.nodes.matched" /></span>.
+
+                                        <span data-bind="if: total()>maxShown()">
+                                            <span data-bind="messageTemplate: [maxShown(), total()]" class="text-muted"><g:message code="count.nodes.shown" /></span>
+                                        </span>
+                                        <a class="textbtn textbtn-default pull-right" data-bind="click: nodesPageView">
+                                            <g:message code="view.in.nodes.page.prompt" />
+                                        </a>
+                                    </span>
+                                </div>
+                                <span >
+                                    <g:render template="/framework/nodesEmbedKO"/>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+
+
+                </label>
+                        %{-- filter text --}%
+                    </div>
+
+
+                </div>
+                    </g:if>
+            </div>
             </div>
             <g:javascript>
                 var nodeLength = jQuery('select[name="extra.nodeIncludeName"]').get(0).options.length;
@@ -242,7 +427,7 @@
                     Event.fire($('nodeSelect'), 'nodeset:change');
                 </g:javascript>
             </g:if>
-        </g:elseif>
+
     </div>
     </div>
 

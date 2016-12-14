@@ -59,7 +59,7 @@ if(System.properties['disable.grails.central']) {
 grails.plugin.location.webrealms = 'webrealms'
 grails.plugin.location.metricsweb = 'metricsweb'
 grails.plugin.location.authfilter = 'authfilter'
-
+grails.servlet.version = "3.0"
 grails.project.dependency.resolution = {
     inherits 'global' // inherit Grails' default dependencies
     log 'warn' // log level of Ivy resolver, either 'error', 'warn', 'info', 'debug' or 'verbose'
@@ -102,7 +102,7 @@ grails.project.dependency.resolution = {
         runtime ':profiler:0.5'
         runtime ':miniprofiler:0.4.1'
         provided ':codenarc:0.22'
-        build   ':jetty:2.0.3'
+        build   ':jetty:3.0.0'
     }
 
     dependencies {
@@ -130,10 +130,11 @@ grails.project.dependency.resolution = {
         compile "javax.validation:validation-api:1.1.0.Final"
         runtime "org.hibernate:hibernate-validator:5.0.3.Final"
         //END fix for https://jira.grails.org/browse/GPHIB-30
+        runtime 'com.h2database:h2:1.4.193'
     }
 }
 grails.war.resources = { stagingDir, args ->
-    delete(file: "${stagingDir}/WEB-INF/lib/jetty-all-7.6.0.v20120127.jar")
+    delete(file: "${stagingDir}/WEB-INF/lib/jetty-all-9.0.7.v20131107.jar")
     delete(file: "${stagingDir}/WEB-INF/lib/rundeck-jetty-server-${rundeckVersion}.jar")
     delete(file: "${stagingDir}/WEB-INF/lib/servlet-api-2.5.jar")
     if(System.getProperty('rundeck.war.additional')!=null){

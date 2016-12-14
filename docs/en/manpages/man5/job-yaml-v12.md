@@ -8,18 +8,20 @@ job-yaml-v13 - The 'job' YAML file declares job entries for Rundeck.
 
 ## Loading and unloading
 
-This file can be batch loaded via *rd-jobs* load command:
+This file can be batch loaded via [rd] jobs load command:
 
 ~~~~~~~~ {.bash}
-rd-jobs load -p project --file /path/to/jobs.yaml -F yaml
+rd jobs load -p project --file /path/to/jobs.yaml -F yaml
 ~~~~~~~~ 
 
 Rundeck job definitions can be dumped and saved to a file via
-rd-jobs list command:
+rd jobs list command:
 
 ~~~~~~~~ {.bash}
-rd-jobs list -p project --file /tmp/jobs.yaml -F yaml
+rd jobs list -p project --file /tmp/jobs.yaml -F yaml
 ~~~~~~~~ 
+
+[rd]: https://rundeck.github.io/rundeck-cli/
 
 ## Structure
 
@@ -560,6 +562,14 @@ Optional map entries are:
 
 :    for a secure option, a storage path to password value to use as default
 
+`isDate`
+
+:    "true/false" - the option should display as a date/time input field
+
+`dateFormat`
+
+:    The date/time format to use in the UI. Using the [momentjs format](http://momentjs.com/docs/#/displaying/format/).
+
 `sortIndex` (deprecated)
 
 :   *integer* - A number indicating the order this option should appear in the GUI.  If specified this
@@ -852,7 +862,7 @@ Defines a plugin notification section, can contain a single Map, or a Sequence o
 
 # SEE ALSO
 
-[rd-jobs](../man1/rd-jobs.html)
+[rd jobs](../man1/rd jobs.html)
 
 <http://yaml.org/>
 

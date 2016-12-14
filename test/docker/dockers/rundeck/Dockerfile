@@ -14,7 +14,21 @@ RUN apt-get -y update && \
         uuid-runtime \
         ncurses-bin \
         iputils-ping \
-        zip
+        jq \
+        zip \
+        apt-transport-https
+
+# add cli tool debian repo
+ARG CLI_DEB_URL
+ARG CLI_VERS
+RUN echo "deb $CLI_DEB_URL /" | sudo tee -a /etc/apt/sources.list
+
+# add GPG key
+#RUN curl "https://bintray.com/user/downloadSubjectPublicKey?username=rundeck" > /tmp/rundeck.gpg.key
+#RUN apt-key add - < /tmp/rundeck.gpg.key
+RUN curl "https://bintray.com/user/downloadSubjectPublicKey?username=bintray" > /tmp/bintray.gpg.key
+RUN apt-key add - < /tmp/bintray.gpg.key
+
 
 ## Install Oracle JVM
 RUN \
@@ -49,6 +63,11 @@ RUN mkdir -p $HOME/data
 COPY data $HOME/data
 VOLUME $HOME/data
 
+#Install Rundeck CLI tool
+RUN test -f $HOME/data/rd.deb && dpkg -i $HOME/data/rd.deb || true
+RUN test -f $HOME/data/rd.deb || apt-get -y update
+RUN test -f $HOME/data/rd.deb || apt-get -y install rundeck-cli=$CLI_VERS
+
 
 #download installer
 ARG LAUNCHER_URL
@@ -58,6 +77,10 @@ RUN test -f $HOME/data/rundeck-launcher.jar && \
      cp $HOME/data/rundeck-launcher.jar $HOME/rundeck-launcher.jar || \
      true
 RUN test -f $HOME/rundeck-launcher.jar || curl -sS -f -L -o $HOME/rundeck-launcher.jar ${LAUNCHER_URL}
+
+# copy api test sources
+RUN mkdir $HOME/api_test
+COPY api_test $HOME/api_test
 
 # RUNDECK - install
 RUN chown -R $USERNAME:$USERNAME $HOME
@@ -71,7 +94,7 @@ RUN java \
 
 #      --java-opts "-Djava.security.egd=file:/dev/./urandom" 
 
-EXPOSE 22 4440 4443
+EXPOSE 22 4440 4443 4444
 
 # Copy files.
 #COPY config $HOME/config
