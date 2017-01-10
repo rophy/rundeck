@@ -178,6 +178,7 @@
                         </g:if>
 
                     </div>
+                    </label>
 		    <select multiple="multiple" name="extra.nodeIncludeName">
 			<g:each var="node" in="${nodes}" status="index">
 				<g:set var="nkey" value="${g.rkey()}"/>
@@ -190,8 +191,8 @@
                                 </option>
 			</g:each>
 		    </select>
-                    </label>
 
+                </g:if>
                 </g:if>
                 <g:if test="${scheduledExecution.nodeFilterEditable || nodefilter == ''}">
                 <div class="subfields nodeFilterFields ">
