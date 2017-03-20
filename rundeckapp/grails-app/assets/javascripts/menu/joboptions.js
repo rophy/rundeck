@@ -60,6 +60,10 @@ function Option(data) {
     self.enforced = ko.observable(data.enforced ? true : false);
     self.isDate = ko.observable(data.isDate ? true : false);
     self.dateFormat = ko.observable(data.dateFormat);
+    /**
+     * Type: used for file upload
+     */
+    self.optionType = ko.observable(data.optionType);
     self.fieldName = ko.observable(data.fieldName);
     self.hasError = ko.observable(data.hasError);
     self.hasRemote = ko.observable(data.hasRemote);
@@ -218,6 +222,17 @@ function Option(data) {
 
     self.selectedOptionValue = ko.observable(self.value());
     self.defaultStoragePath = ko.observable(data.defaultStoragePath);
+    self.dateFormatErr = ko.computed(function () {
+        if (!self.isDate() || !self.value() || !self.dateFormat()) {
+            return false;
+        }
+        try {
+            var m = moment(self.value(), self.dateFormat(), true);
+            return !m.isValid();
+        } catch (e) {
+            return true;
+        }
+    });
     self.truncateDefaultValue = ko.computed(function () {
         var val = self.defaultValue();
         if (!val || val.length < 50) return val;
@@ -267,6 +282,10 @@ function Option(data) {
                 && self.values().indexOf(self.defaultValue()) >= 0
             )
             && self.value() != self.defaultValue();
+    });
+
+    self.isFileType=ko.computed(function () {
+        return self.optionType() == 'file';
     });
     /**
      * Return the array of option objects to use for displaying the Select input for this option

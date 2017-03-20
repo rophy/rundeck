@@ -24,13 +24,12 @@ import com.dtolabs.rundeck.core.common.Framework
 import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategy
 import com.dtolabs.rundeck.core.jobs.JobReference
 import com.dtolabs.rundeck.core.jobs.JobRevReference
-import com.dtolabs.rundeck.core.plugins.configuration.PluginAdapterUtility
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolver
-import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolverFactory
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.plugins.configuration.Validator
 import com.dtolabs.rundeck.plugins.scm.JobChangeEvent
 import com.dtolabs.rundeck.server.authorization.AuthConstants
+import grails.events.EventException
 import grails.plugins.quartz.listeners.SessionBinderJobListener
 import grails.transaction.Transactional
 import org.apache.log4j.Logger
@@ -51,6 +50,7 @@ import rundeck.controllers.JobXMLException
 import rundeck.controllers.ScheduledExecutionController
 import rundeck.controllers.WorkflowController
 import rundeck.quartzjobs.ExecutionJob
+import rundeck.services.events.ExecutionPrepareEvent
 
 import javax.servlet.http.HttpSession
 import java.text.MessageFormat
@@ -78,6 +78,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
     def grailsEvents
     def pluginService
     def executionUtilService
+    def fileUploadService
 
     @Override
     void afterPropertiesSet() throws Exception {
@@ -800,7 +801,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
         def ScheduledExecution scheduledExecution = getByIDorUUID(jobid)
         if (!scheduledExecution) {
             def err = [
-                    message: lookupMessage( "api.error.item.doesnotexist",  ['Job ID', jobid] as Object[]),
+                    message: lookupMessage( "api.error.item.doesnotexist",  ['Job ID', jobid]),
                     errorCode: 'notfound',
                     id: jobid
             ]
@@ -822,7 +823,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                 scheduledExecution.project
         )) {
             def err = [
-                    message: lookupMessage('api.error.item.unauthorized', ['Delete', 'Job ID', scheduledExecution.extid] as Object[]),
+                    message: lookupMessage('api.error.item.unauthorized', ['Delete', 'Job ID', scheduledExecution.extid]),
                     errorCode: 'unauthorized',
                     id: scheduledExecution.extid,
                     job: scheduledExecution
@@ -837,7 +838,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
             return [success:false,error:  [message: result.error, job: scheduledExecution, errorCode: 'failed', id: scheduledExecution.extid]]
         } else {
             logJobChange(changeinfo, jobdata)
-            return [success: [message: lookupMessage('api.success.job.delete.message', [jobtitle] as Object[]), job: scheduledExecution]]
+            return [success: [message: lookupMessage('api.success.job.delete.message', [jobtitle]), job: scheduledExecution]]
         }
     }
     /**
@@ -946,6 +947,17 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                 .startAt(startTime)
                 .build()
 
+        try {
+            fileUploadService.executionBeforeSchedule(new ExecutionPrepareEvent(
+                    execution: e,
+                    job: se,
+                    options: executionService.parseJobOptsFromString(se, e.argString)
+            )
+            )
+        } catch (FileUploadServiceException exc) {
+            log.warn("Failed uploaded file preparation for scheduled job: $exc", exc)
+        }
+
         if (quartzScheduler.checkExists(jobDetail.getKey())) {
             log.info("rescheduling existing ad-hoc job in project ${se.project} ${se.extid} ${e.id}")
             return quartzScheduler.rescheduleJob(
@@ -959,11 +971,17 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
         }
     }
 
-    def boolean existsJob(String jobName, String groupName){
+    /**
+     *
+     * @param jobName
+     * @param groupName
+     * @return true if the quartz job is executing
+     */
+    def boolean quartzJobIsExecuting(String jobName, String groupName){
         def exists = false
 
         quartzScheduler.getCurrentlyExecutingJobs().each{ def JobExecutionContext jexec ->
-            if (jexec.getJobDetail().getName() == jobName && jexec.getJobDetail().getGroup() == groupName) {
+            if (jexec.getJobDetail().key.getName() == jobName && jexec.getJobDetail().key.getGroup() == groupName) {
                 def job = jexec.getJobInstance()
                 if (job) {
                     exists = true
@@ -973,24 +991,52 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
 
         return exists
     }
+    /**
+     *
+     * @param se job
+     * @param e execution
+     * @return quartz scheduler fire instance Id
+     */
+    def String findExecutingQuartzJob(ScheduledExecution se, Execution e) {
+        String found = null
+        def ident = getJobIdent(se, e)
 
-    def boolean interruptJob(String jobName, String groupName){
-        def didCancel = false
-
-        quartzScheduler.getCurrentlyExecutingJobs().each{ def JobExecutionContext jexec ->
-            if (jexec.getJobDetail().getName() == jobName && jexec.getJobDetail().getGroup() == groupName){
+        quartzScheduler.getCurrentlyExecutingJobs().each { def JobExecutionContext jexec ->
+            if (jexec.getJobDetail().key.getName() == ident.jobname &&
+                    jexec.getJobDetail().key.getGroup() == ident.groupname) {
                 def job = jexec.getJobInstance()
-                if (job && job instanceof InterruptableJob) {
-                    job.interrupt()
-                    didCancel = true
+                if (job instanceof ExecutionJob && e.id == job.executionId) {
+                    found = jexec.fireInstanceId
                 }
             }
         }
 
+        return found
+    }
+
+    /**
+     * Interrupt a running quartz job if present or optinoally delete from scheduler if not
+     * @param quartzIntanceId quartz fire instance Id
+     * @param jobName
+     * @param groupName
+     * @param deleteFromScheduler
+     * @return true if the job was interrupted or deleted
+     */
+    def boolean interruptJob(
+            String quartzIntanceId,
+            String jobName,
+            String groupName,
+            boolean deleteFromScheduler = false
+    )
+    {
+        def didCancel = quartzIntanceId ? quartzScheduler.interrupt(quartzIntanceId) : false
+
         /** If the job has not started yet, it will not be included in currently executing jobs **/
-        JobKey jobKey = new JobKey(jobName, groupName)
-        if (quartzScheduler.deleteJob(jobKey)) {
-            didCancel = true
+        if (!didCancel && deleteFromScheduler) {
+            JobKey jobKey = new JobKey(jobName, groupName)
+            if (quartzScheduler.deleteJob(jobKey)) {
+                didCancel = true
+            }
         }
 
         return didCancel
@@ -1001,7 +1047,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
 
         if (!se) {
             ident = [jobname:"TEMP:"+e.user +":"+e.id, groupname:e.user+":run"]
-        } else if (se.scheduled && e.status != "scheduled") {
+        } else if (se.scheduled && e.executionType == "scheduled") {
             // For jobs which have fixed schedules
             ident = [jobname:se.generateJobScheduledName(),groupname:se.generateJobGroupName()]
         } else {
@@ -1017,9 +1063,9 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
     def long scheduleTempJob(ScheduledExecution se, String user, AuthContext authContext,
                              Execution e, Map secureOpts =null,
                              Map secureOptsExposed =null, int retryAttempt = 0) {
-
-        def quartzJobName="TEMP:" + user + ":" + se.id + ":" + e.id
-        def jobDetail = createJobDetail(se, quartzJobName,user + ":run:" + se.id)
+        def ident = getJobIdent(se, e)
+        def quartzJobName = ident.jobname//"TEMP:" + user + ":" + se.id + ":" + e.id
+        def jobDetail = createJobDetail(se, quartzJobName, ident.groupname /*user + ":run:" + se.id*/)
         jobDetail.getJobDataMap().put("user", user)
         jobDetail.getJobDataMap().put("authContext", authContext)
         jobDetail.getJobDataMap().put("executionId", e.id.toString())
@@ -1226,12 +1272,12 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
      * @parameter key
      * @returns corresponding value from messages.properties
      */
-    def lookupMessage(String theKey, Object[] data, String defaultMessage = null) {
+    def lookupMessage(String theKey, List<Object> data, String defaultMessage = null) {
         def locale = getLocale()
         def theValue = null
 //        MessageSource messageSource = applicationContext.getBean("messageSource")
         try {
-            theValue = messageSource.getMessage(theKey, data, locale)
+            theValue = messageSource.getMessage(theKey, data as Object[], locale)
         } catch (org.springframework.context.NoSuchMessageException e) {
             log.error "Missing message ${theKey}"
 //        } catch (java.lang.NullPointerException e) {
@@ -1239,7 +1285,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
         }
         if (null == theValue && defaultMessage) {
             MessageFormat format = new MessageFormat(defaultMessage);
-            theValue = format.format(data)
+            theValue = format.format(data as Object[])
         }
         return theValue
     }
@@ -1588,8 +1634,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                 return [success     : false, scheduledExecution: scheduledExecution,
                         message     : lookupMessage(
                                 'api.error.item.unauthorized',
-                                [AuthConstants.ACTION_TOGGLE_SCHEDULE, 'Job ID', scheduledExecution.extid].toArray()
-
+                                [AuthConstants.ACTION_TOGGLE_SCHEDULE, 'Job ID', scheduledExecution.extid]
                         ),
                         errorCode   : 'api.error.item.unauthorized',
                         unauthorized: true]
@@ -1608,8 +1653,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                 return [success          : false, scheduledExecution: scheduledExecution,
                         message          : lookupMessage(
                                 'api.error.item.unauthorized',
-                                [AuthConstants.ACTION_TOGGLE_EXECUTION, 'Job ID', scheduledExecution.extid].toArray()
-
+                                [AuthConstants.ACTION_TOGGLE_EXECUTION, 'Job ID', scheduledExecution.extid]
                         ),
                         errorCode   : 'api.error.item.unauthorized',
                         unauthorized: true]
@@ -1673,6 +1717,11 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
         if (nonopts.uuid != scheduledExecution.uuid) {
             changeinfo.extraInfo = " (internalID:${scheduledExecution.id})"
         }
+
+        //clear
+        scheduledExecution.retry = null
+        scheduledExecution.timeout = null
+
         def originalRef = jobEventRevRef(scheduledExecution)
 
         scheduledExecution.properties = nonopts
@@ -2305,6 +2354,10 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
         }
         //clear filter params
         scheduledExecution.clearFilterFields()
+        //clear
+        scheduledExecution.retry = null
+        scheduledExecution.timeout = null
+
         def originalRef=jobEventRevRef(scheduledExecution)
 
         scheduledExecution.properties = newprops

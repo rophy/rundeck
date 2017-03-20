@@ -24,6 +24,12 @@
  --%>
 
 <div class="row" data-bind="if: option">
+    <!-- ko if: isFileType -->
+        <div class="col-sm-12">
+            <input type="file" name="" id="" data-bind="attr: {name: fieldName, id: fieldId}" class="optionvaluesfield  form-control">
+        </div>
+    <!-- /ko -->
+    <!-- ko if: !isFileType() -->
     <%-- Print out the input box for random input --%>
     <div data-bind="if: hasTextfield">
         <div data-bind="css: {'col-sm-8': hasExtended(), 'col-sm-12': !hasExtended() }">
@@ -48,7 +54,7 @@
             <div data-bind="if: !secureInput()">
                 <div data-bind="if: isDate()">
 
-                    <div class='input-group date' data-bind="datetimepicker: value, dateFormat: dateFormat">
+                    <div class='input-group date' data-bind="datetimepicker: value, dateFormat: dateFormat, css: {'has-error': dateFormatErr}">
                         <span class="input-group-addon has_tooltip">
                             <span class="glyphicon glyphicon-calendar"></span>
                         </span>
@@ -157,7 +163,7 @@
             </span>
         </div>
     </div>
-
+    <!-- /ko -->
 </div>
 
 <div data-bind="if: hasRemote() && remoteValues().length<1 && !remoteError()">
