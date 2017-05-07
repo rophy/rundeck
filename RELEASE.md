@@ -1,51 +1,42 @@
-Release 2.7.3
+Release 2.8.2
 ===========
 
-Date: 2017-03-10
+Date: 2017-04-19
 
-Name: <span style="color: Tomato"><span class="glyphicon glyphicon-paperclip"></span> "cafecito tomato paperclip"</span>
+Name: <span style="color: Olive"><span class="glyphicon glyphicon-flag"></span> "cafe cubano olive flag"</span>
 
-## Upgrading from 2.6
+## Upgrading from 2.8.0
+
+**Important Note**: please see the [Upgrading Guide](http://rundeck.org/docs/upgrading/index.html) if you are using Mysql or H2 database,
+and are upgrading from Rundeck 2.8.0.
+
+A DB schema change requires a manual fix before upgrading.
+
+## Upgrading from Earlier versions
 
 * See the [Upgrading Guide](http://rundeck.org/docs/upgrading/index.html)
 
 ## Notes
 
-This is primarily a bugfix release, with a bonus enhancement.
-
-* Fixed some plugin loader problems which were causing bugs with the Jasypt encryption for key storage, and Git SCM plugins
-* Added autocomplete support to the Job Workflow editor text fields and text areas.
+Bug fixes and a few slight enhancements.
 
 ## Contributors
 
-* Albert Casademont (acasademont)
-* GitHub (web-flow)
 * Greg Schueler (gschueler)
 * jtobard
 
-## Bug Reporters
+## Reporters
 
-* ChiefAlexander
-* acasademont
-* daikirinet
-* gschueler
-* isuftin
-* schans
-* seunaw
-* willemdh
+* jtobard
+* al-heisner
+* jquick
+* ahonor
 
 ## Issues
 
-[Milestone 2.7.3](https://github.com/rundeck/rundeck/milestone/51)
+[Milestone 2.8.2](https://github.com/rundeck/rundeck/milestone/54)
 
-* [Error; Save Command as a Job ](https://github.com/rundeck/rundeck/issues/2362)
-* [Fix plugin loader issues](https://github.com/rundeck/rundeck/pull/2361)
-* [GUI: Autocomplete job/context vars in step editors](https://github.com/rundeck/rundeck/pull/2355)
-* [Abort execution can fail in cluster mode without explanation (wrong cluster node)](https://github.com/rundeck/rundeck/issues/2327)
-* [Add apitoken.aclpolicy to Debian conffile](https://github.com/rundeck/rundeck/pull/2320)
-* [Missing dependency on uuid-runtime in debian package since 2.7.2](https://github.com/rundeck/rundeck/issues/2316)
-* [Error scm git commit job ](https://github.com/rundeck/rundeck/issues/2294)
-* [User and result columns in Activity page are mixed into each other](https://github.com/rundeck/rundeck/issues/2207)
-* [SCM Export Fails - ClassNotFoundException](https://github.com/rundeck/rundeck/issues/2031)
-* [SCM import fails](https://github.com/rundeck/rundeck/issues/1854)
-* [Jasypt exception thrown, no further information provided](https://github.com/rundeck/rundeck/issues/1785)
+* [Using option value in key storage path](https://github.com/rundeck/rundeck/pull/2443)
+* [Jobs hang when retry is enabled and step fails on at least one node](https://github.com/rundeck/rundeck/issues/2442)
+* [v2.8.1 Cannot create table job_file_record due to reserved word (oracle)](https://github.com/rundeck/rundeck/issues/2441)
+* [Expand global properties in plugin.yaml context](https://github.com/rundeck/rundeck/issues/2399)

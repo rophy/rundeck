@@ -21,15 +21,17 @@ import com.dtolabs.rundeck.core.authorization.AuthContext
 import com.dtolabs.rundeck.core.authorization.UserAndRoles
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
 import com.dtolabs.rundeck.core.common.Framework
+import com.dtolabs.rundeck.core.common.IRundeckProjectConfig
 import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategy
 import com.dtolabs.rundeck.core.jobs.JobReference
 import com.dtolabs.rundeck.core.jobs.JobRevReference
+import com.dtolabs.rundeck.core.plugins.configuration.Property
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyResolver
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.plugins.configuration.Validator
 import com.dtolabs.rundeck.plugins.scm.JobChangeEvent
+import com.dtolabs.rundeck.plugins.util.PropertyBuilder
 import com.dtolabs.rundeck.server.authorization.AuthConstants
-import grails.events.EventException
 import grails.plugins.quartz.listeners.SessionBinderJobListener
 import grails.transaction.Transactional
 import org.apache.log4j.Logger
@@ -51,6 +53,7 @@ import rundeck.controllers.ScheduledExecutionController
 import rundeck.controllers.WorkflowController
 import rundeck.quartzjobs.ExecutionJob
 import rundeck.services.events.ExecutionPrepareEvent
+import rundeck.services.framework.RundeckProjectConfigurable
 
 import javax.servlet.http.HttpSession
 import java.text.MessageFormat
@@ -59,7 +62,21 @@ import java.text.SimpleDateFormat
 /**
  *  ScheduledExecutionService manages scheduling jobs with the Quartz scheduler
  */
-class ScheduledExecutionService implements ApplicationContextAware, InitializingBean{
+class ScheduledExecutionService implements ApplicationContextAware, InitializingBean, RundeckProjectConfigurable {
+    public static final String CONF_GROUP_EXPAND_LEVEL = 'project.jobs.gui.groupExpandLevel'
+    public static final List<Property> ProjectConfigProperties = [
+            PropertyBuilder.builder().with {
+                integer 'groupExpandLevel'
+                title 'Job Group Expansion Level'
+                description 'In the Jobs page, expand Job groups to this depth by default.\n\n' +
+                                    '* `0`: collapse all Groups\n' +
+                                    '* `-1`: expand all Groups.'
+                required(false)
+                defaultValue '1'
+            }.build(),
+    ]
+    public static
+    final LinkedHashMap<String, String> ConfigPropertiesMapping = ['groupExpandLevel': CONF_GROUP_EXPAND_LEVEL]
     boolean transactional = true
 
     def FrameworkService frameworkService
@@ -84,6 +101,34 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
     void afterPropertiesSet() throws Exception {
         //add listener for every job
         quartzScheduler?.getListenerManager()?.addJobListener(sessionBinderListener)
+    }
+
+    @Override
+    String getCategory() { return "gui" }
+
+    @Override
+    List<Property> getProjectConfigProperties() { ProjectConfigProperties }
+
+    @Override
+    Map<String, String> getPropertiesMapping() { ConfigPropertiesMapping }
+
+    /**
+     * Return project config for node cache delay
+     * @param project
+     * @return
+     */
+    int getJobExpandLevel(final IRundeckProjectConfig projectConfig) {
+        projectConfig.hasProperty(CONF_GROUP_EXPAND_LEVEL) ?
+                tryParseInt(projectConfig).orElse(1) :
+                1
+    }
+
+    private Optional<Integer> tryParseInt(IRundeckProjectConfig projectConfig) {
+        try {
+            Optional.of(Integer.parseInt(projectConfig.getProperty(CONF_GROUP_EXPAND_LEVEL)))
+        } catch (NumberFormatException e) {
+            Optional.empty()
+        }
     }
 
     /**
@@ -764,6 +809,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                     exec.scheduledExecution = null
                 }
             }
+            fileUploadService.deleteRecordsForScheduledExecution(scheduledExecution)
             try {
                 scheduledExecution.delete(flush: true)
                 deleteJob(jobname, groupname)
@@ -1047,7 +1093,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
 
         if (!se) {
             ident = [jobname:"TEMP:"+e.user +":"+e.id, groupname:e.user+":run"]
-        } else if (se.scheduled && e.executionType == "scheduled") {
+        } else if (se.scheduled && e.executionType == "scheduled" && !e.retryAttempt) {
             // For jobs which have fixed schedules
             ident = [jobname:se.generateJobScheduledName(),groupname:se.generateJobGroupName()]
         } else {
@@ -1931,6 +1977,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
             def optfailed = false
             optsmap.values().each {Option opt ->
                 EditOptsController._validateOption(opt,null,scheduledExecution.scheduled)
+                fileUploadService.validateFileOptConfig(opt)
                 if (opt.errors.hasErrors()) {
                     optfailed = true
                     def errmsg = opt.name + ": " + opt.errors.allErrors.collect {lookupMessageError(it)}.join(";")
@@ -1968,6 +2015,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                 def Option theopt = new Option(optdefparams)
                 scheduledExecution.addToOptions(theopt)
                 EditOptsController._validateOption(theopt,null,scheduledExecution.scheduled)
+                fileUploadService.validateFileOptConfig(theopt)
                 if (theopt.errors.hasErrors() || !theopt.validate()) {
                     failed = true
                     theopt.discard()
@@ -1987,6 +2035,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
             //evaluate required option defaults
             scheduledExecution.options.each{Option theopt->
                 EditOptsController._validateOption(theopt,null,scheduledExecution.scheduled)
+                fileUploadService.validateFileOptConfig(theopt)
                 if(theopt.errors.hasErrors()) {
                     failed=true
                     def errmsg = theopt.name + ": " +
@@ -2482,6 +2531,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
             params.options.each {Option theopt ->
                 scheduledExecution.addToOptions(theopt)
                 EditOptsController._validateOption(theopt,null,scheduledExecution.scheduled)
+                fileUploadService.validateFileOptConfig(theopt)
                 if (theopt.errors.hasErrors() || !theopt.validate()) {
                     failed = true
                     theopt.discard()
@@ -2969,6 +3019,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
             def optfailed = false
             optsmap.values().each {Option opt ->
                 EditOptsController._validateOption(opt,null,scheduledExecution.scheduled)
+                fileUploadService.validateFileOptConfig(opt)
                 if (opt.errors.hasErrors()) {
                     optfailed = true
                     def errmsg = opt.name + ": " + opt.errors.allErrors.collect {lookupMessageError(it)}.join(";")
@@ -2998,6 +3049,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                     def Option theopt = origopt.createClone()
                     scheduledExecution.addToOptions(theopt)
                     EditOptsController._validateOption(theopt,null,scheduledExecution.scheduled)
+                    fileUploadService.validateFileOptConfig(theopt)
 
                     if (theopt.errors.hasErrors() || !theopt.validate()) {
                         failed = true
@@ -3018,6 +3070,7 @@ class ScheduledExecutionService implements ApplicationContextAware, Initializing
                     def Option theopt = new Option(optdefparams)
                     scheduledExecution.addToOptions(theopt)
                     EditOptsController._validateOption(theopt,null,scheduledExecution.scheduled)
+                    fileUploadService.validateFileOptConfig(theopt)
                     if (theopt.errors.hasErrors() || !theopt.validate()) {
                         failed = true
                         theopt.discard()

@@ -29,8 +29,8 @@ import com.dtolabs.rundeck.core.common.INodeSet;
 import com.dtolabs.rundeck.core.common.NodesSelector;
 import com.dtolabs.rundeck.core.jobs.JobService;
 import com.dtolabs.rundeck.core.common.OrchestratorConfig;
+import com.dtolabs.rundeck.core.nodes.ProjectNodeService;
 import com.dtolabs.rundeck.core.storage.StorageTree;
-import com.dtolabs.rundeck.plugins.orchestrator.OrchestratorPlugin;
 
 import java.io.File;
 import java.util.Map;
@@ -66,6 +66,11 @@ public interface ExecutionContext {
      * @return the job service
      */
     public JobService getJobService();
+
+    /**
+     * @return the node service
+     */
+    public ProjectNodeService getNodeService();
 
     /**
      * @return username
@@ -130,11 +135,6 @@ public interface ExecutionContext {
     public Map<String, Map<String, String>> getPrivateDataContext();
 
     public ExecutionListener getExecutionListener();
-
-    /**
-     * @return Specific file to use for nodes source instead of project nodes
-     */
-    public File getNodesFile();
 
 	public OrchestratorConfig getOrchestrator();
 }

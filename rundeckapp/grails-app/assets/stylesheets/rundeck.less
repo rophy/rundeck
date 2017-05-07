@@ -233,6 +233,11 @@
         content: 'OK';
       }
 
+    &[data-execstate=OTHER][data-statusstring=incomplete]:after {
+      content: 'Incomplete';
+      color: orange;
+    }
+
       &[data-execstate=NODE_PARTIAL_SUCCEEDED]:after {
         content: 'Partial';
       }
@@ -763,6 +768,14 @@ section{
         .glyphicon-asterisk();
       }
     }
+    &[data-execstate=OTHER][data-statusstring=incomplete] {
+      color: orange;
+
+      &.icon {
+        .glyphicon();
+        .glyphicon-exclamation-sign();
+      }
+    }
     &.fail, &[data-execstate=FAILED] {
       color: @brand-danger;
 
@@ -1175,8 +1188,11 @@ section{
     }
 
 
-    td.data.log_warn, td.data.log_error {
+    td.data.log_error {
       color: #800;
+    }
+    td.data.log_warn {
+      color: #a80;
     }
 
     table.execoutput.collapse_stepnum {
@@ -1284,6 +1300,11 @@ section{
   .table-footer{
     background: @panel-footer-bg;
   }
+  th.table-header{
+    .text-header();
+    .text-center();
+    .text-muted();
+  }
 
 
   //node detail
@@ -1317,6 +1338,7 @@ section{
     }
   }
 }
+
 .node_entry{
   .nodeident, .nodedesc, .nodetags, .username, .hostname{
     white-space: nowrap;
@@ -1430,7 +1452,24 @@ pre.filtererror{
   color: @brand-info;
   padding:0;
 }
+td {
 
+  &.ellipsis {
+    position: relative;
+  }
+  &.ellipsis:before {
+    content: '&nbsp;';
+    visibility: hidden;
+  }
+  &.ellipsis span {
+    position: absolute;
+    left: 0;
+    right: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
 .overflowx{
   text-overflow: ellipsis;
   overflow-x: auto;

@@ -1,5 +1,6 @@
 package rundeck
 
+import com.dtolabs.rundeck.app.support.DomainIndexHelper
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.ObjectMapper
 
@@ -44,6 +45,9 @@ public class Workflow {
     static mapping = {
         pluginConfig type: 'text'
         commands lazy: false
+        DomainIndexHelper.generate(delegate){
+            index 'WORKFLOW_COMMANDS_IDX_0',['commands']
+        }
     }
     //ignore fake property 'configuration' and do not store it
     static transients = ['pluginConfigMap']
@@ -139,6 +143,18 @@ public class Workflow {
     /** create canonical map representation */
     public Map toMap(){
         def plugins=pluginConfigMap?[pluginConfig:pluginConfigMap]:[:]
+
+        //remove empty WorkflowStrategy config for the strategy
+        if (!plugins.pluginConfig?.get('WorkflowStrategy')?.get(strategy)) {
+            plugins.pluginConfig?.remove('WorkflowStrategy')
+        }
+        if (!plugins.pluginConfig) {
+            plugins.remove('pluginConfig')
+        }
+        //cleanup WorkflowStrategy to only include the current strategy data
+        if (plugins.pluginConfig?.get('WorkflowStrategy')) {
+            plugins.pluginConfig['WorkflowStrategy'] = [(strategy): plugins.pluginConfig['WorkflowStrategy'][strategy]]
+        }
         return [/*threadcount:threadcount,*/ keepgoing:keepgoing, strategy:strategy, commands:commands.collect{it.toMap()}] + plugins
     }
 

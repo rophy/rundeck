@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 SimplifyOps, Inc. (http://simplifyops.com)
+ * Copyright 2017 Rundeck, Inc. (http://rundeck.com)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,27 @@
  * limitations under the License.
  */
 
-package com.dtolabs.rundeck.core.authorization.providers;
+package com.dtolabs.rundeck.core.nodes;
 
-import com.dtolabs.rundeck.core.authorization.AclRule;
-import com.dtolabs.rundeck.core.authorization.AclRuleBuilder;
+import com.dtolabs.rundeck.core.common.INodeSet;
 
-import java.util.Map;
-import java.util.Set;
+/**
+ * Service for interact with nodes.
+ */
+public interface ProjectNodeService {
 
 
-public interface AclContext {
+    /**
+     * Expire cache and refresh node list
+     *
+     * @param project Project name
+     */
+    void refreshProjectNodes(final String project);
 
-    public ContextDecision includes(Map<String, String> resource, String action);
-
-    Set<AclRule> createRules(AclRuleBuilder prototype);
+    /**
+     * Get the current nodes
+     * @param name Project name
+     * @return nodes
+     */
+    INodeSet getNodeSet(final String name);
 }

@@ -18,6 +18,7 @@ package rundeck
 
 import com.dtolabs.rundeck.app.support.ExecutionContext
 import com.dtolabs.rundeck.core.common.FrameworkResource
+import org.rundeck.util.Sizes
 
 class ScheduledExecution extends ExecutionContext {
     static final String RUNBOOK_MARKER='---'
@@ -282,6 +283,12 @@ class ScheduledExecution extends ExecutionContext {
                 }else{
                     //built-in notification, urls or recipients subelements
                     trigger.putAll(map1)
+                }
+            }
+            notifications.each {
+                if (map.notification[it.eventTrigger].plugin instanceof Collection) {
+                    map.notification[it.eventTrigger].plugin =
+                            map.notification[it.eventTrigger].plugin.sort { a, b -> a.type <=> b.type }
                 }
             }
         }
@@ -638,34 +645,9 @@ class ScheduledExecution extends ExecutionContext {
      * @return
      */
     public long getTimeoutDuration(){
-        timeout?evaluateTimeoutDuration(timeout):-1
+        timeout? Sizes.parseTimeDuration(timeout):-1
     }
 
-    /**
-     * Return the timeout duration in seconds for a timeout string
-     * @param timeout
-     * @param opts
-     * @return
-     */
-    public static long evaluateTimeoutDuration(String timeout){
-        long timeoutval=0
-        def exts=[s:1,m:60,h:60*60,d:24*60*60]
-        def matcher= (timeout =~ /(\d+)(.)?/)
-        matcher.each {m->
-            int val
-            try{
-                val=Integer.parseInt(m[1])
-            }catch (NumberFormatException e){
-                return
-            }
-            if(m[2] && exts[m[2]]){
-                timeoutval+=(val*exts[m[2]])
-            }else if(!m[2]){
-                timeoutval += val
-            }
-        }
-        timeoutval
-    }
     /**
      * parse the request parameters, and populate the dayOfWeek and month fields.
      * if 'everyDayOfWeek' is 'true', then dayOfWeek will be "*".
@@ -941,7 +923,7 @@ class ScheduledExecution extends ExecutionContext {
      * @return
      */
     List<Option> listFileOptions() {
-        options.findAll { it.optionType == 'file' } as List
+        options.findAll { it.typeFile } as List
     }
 }
 

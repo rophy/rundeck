@@ -18,7 +18,7 @@ import spock.lang.Shared
 /**
  * Integration tests for the ScheduledExecutionService.
  */
-class ScheduledExecutionServiceTest extends IntegrationSpec {
+class ScheduledExecutionServiceIntegrationSpec extends IntegrationSpec {
     public static final String TEST_UUID1 = 'BB27B7BB-4F13-44B7-B64B-D2435E2DD8C7'
     public static final String TEST_UUID2 = '490966E0-2E2F-4505-823F-E2665ADC66FB'
 
@@ -53,6 +53,7 @@ class ScheduledExecutionServiceTest extends IntegrationSpec {
             getServerUUID() >> TEST_UUID2
             getRundeckBase() >> ''
         }
+        service.fileUploadService=Mock(FileUploadService)
 
         String jobUuid  = UUID.randomUUID().toString()
         def workflow = new Workflow(commands: []).save(flush: true,
@@ -116,6 +117,7 @@ class ScheduledExecutionServiceTest extends IntegrationSpec {
             getServerUUID() >> TEST_UUID2
             getRundeckBase() >> ''
         }
+        service.fileUploadService=Mock(FileUploadService)
 
         String jobUuid  = UUID.randomUUID().toString()
         String jobUuid2 = UUID.randomUUID().toString()

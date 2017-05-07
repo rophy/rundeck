@@ -1913,6 +1913,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def notificationPlugins = notificationService.listNotificationPlugins()
 
         def orchestratorPlugins = orchestratorPluginService.listDescriptions()
+        def globals=frameworkService.getProjectGlobals(scheduledExecution.project).keySet()
         return [scheduledExecution  :scheduledExecution, crontab:crontab, params:params,
                 notificationPlugins : notificationPlugins,
                 orchestratorPlugins : orchestratorPlugins,
@@ -1920,7 +1921,8 @@ class ScheduledExecutionController  extends ControllerBase{
                 nextExecutionTime   :scheduledExecutionService.nextExecutionTime(scheduledExecution),
                 authorized          :scheduledExecutionService.userAuthorizedForJob(request,scheduledExecution,authContext),
                 nodeStepDescriptions: nodeStepTypes,
-                stepDescriptions    : stepTypes]
+                stepDescriptions    : stepTypes,
+                globalVars:globals]
     }
 
 
@@ -1971,6 +1973,7 @@ class ScheduledExecutionController  extends ControllerBase{
             def nodeStepTypes = frameworkService.getNodeStepPluginDescriptions()
             def stepTypes = frameworkService.getStepPluginDescriptions()
             def strategyPlugins = scheduledExecutionService.getWorkflowStrategyPluginDescriptions()
+            def globals=frameworkService.getProjectGlobals(scheduledExecution.project).keySet()
             return render(view:'edit', model: [scheduledExecution:scheduledExecution,
                        nextExecutionTime:scheduledExecutionService.nextExecutionTime(scheduledExecution),
                     notificationValidation: params['notificationValidation'],
@@ -1979,7 +1982,8 @@ class ScheduledExecutionController  extends ControllerBase{
                     strategyPlugins: strategyPlugins,
                     notificationPlugins: notificationService.listNotificationPlugins(),
                     orchestratorPlugins: orchestratorPluginService.listDescriptions(),
-                    params:params
+                    params:params,
+                    globalVars:globals
                    ])
         }else{
 
@@ -2063,7 +2067,7 @@ class ScheduledExecutionController  extends ControllerBase{
     /**
      * action to populate the Create form with execution info from a previous (transient) execution
      */
-    def createFromExecution={
+    def createFromExecution(){
 
         log.debug("ScheduledExecutionController: create : params: " + params)
         Execution execution = Execution.get(params.executionId)
@@ -2115,7 +2119,7 @@ class ScheduledExecutionController  extends ControllerBase{
         def wf=WorkflowController.getSessionWorkflow(session,null,props.workflow)
         session.editWFPassThru=true
 
-        def model=create.call()
+        def model=create()
         render(view:'create',model:model)
     }
 
@@ -2187,11 +2191,13 @@ class ScheduledExecutionController  extends ControllerBase{
         def stepTypes = frameworkService.getStepPluginDescriptions()
         log.debug("ScheduledExecutionController: create : now returning model data to view...")
         def strategyPlugins = scheduledExecutionService.getWorkflowStrategyPluginDescriptions()
+        def globals=frameworkService.getProjectGlobals(scheduledExecution.project).keySet()
         return ['scheduledExecution':scheduledExecution,params:params,crontab:[:],
                 nodeStepDescriptions: nodeStepTypes, stepDescriptions: stepTypes,
                 notificationPlugins: notificationService.listNotificationPlugins(),
                 strategyPlugins:strategyPlugins,
-                orchestratorPlugins: orchestratorPluginService.listDescriptions()]
+                orchestratorPlugins: orchestratorPluginService.listDescriptions(),
+                globalVars:globals]
     }
 
     private clearEditSession(id='_new'){
@@ -2895,7 +2901,6 @@ class ScheduledExecutionController  extends ControllerBase{
 
         if (runAtTime) {
             inputOpts['runAtTime'] = runAtTime
-            inputOpts['executionType'] = 'user-scheduled'
 
             def scheduleResult = executionService.scheduleAdHocJob(
                     scheduledExecution,
@@ -2941,7 +2946,11 @@ class ScheduledExecutionController  extends ControllerBase{
         def fileresults = [:]
         if (request instanceof MultipartRequest) {
             def fileOptions = scheduledExecution.listFileOptions()
-            def fileOptionNames = fileOptions*.name
+            def fileOptionConfig = [:]
+            fileOptions.each { Option option ->
+                fileOptionConfig[option.name] = option.configMap
+            }
+            def fileOptionNames = fileOptionConfig.keySet()
             def invalid = []
             long maxsize = fileUploadService.optionUploadMaxSize
             if (maxsize > 0) {
@@ -2984,7 +2993,9 @@ class ScheduledExecutionController  extends ControllerBase{
                                     authContext.username,
                                     file.originalFilename,
                                     optname,
+                                    fileOptionConfig[optname],
                                     scheduledExecution.extid,
+                                    scheduledExecution.project,
                                     expirationStart ?: new Date()
                             )
                             fileresults[optname] = ref
@@ -3411,6 +3422,7 @@ class ScheduledExecutionController  extends ControllerBase{
         }
 
         if (request.api_version <= ApiRequestFilters.V17 || !jobRunAtTime) {
+            inputOpts['executionType'] = 'user'
             result = executionService.executeJob(scheduledExecution,
                         authContext, username, inputOpts)
         }
@@ -3490,12 +3502,17 @@ class ScheduledExecutionController  extends ControllerBase{
             )
         }
         def fileOptionNames = fileOptions*.name
+        def fileMap = [:]
+        fileOptions.each { Option option ->
+            fileMap[option.name] = option
+        }
         def uploadedFileRefs = [:]
         def uploadError
-        if (request instanceof MultipartRequest) {
+        if (request instanceof MultipartRequest && request.fileMap) {
             def invalid = []
             Map<String,MultipartFile> optionRequestFiles = [:]
-            ((MultipartRequest) request).fileMap.each { String name, file ->
+            ((MultipartRequest) request).fileNames.each { String name ->
+                MultipartFile file = ((MultipartRequest) request).getFile(name)
                 if (name.startsWith(optionParameterPrefix)) {
                     //process file option upload
                     String optname = name.substring(optionParameterPrefix.length())
@@ -3532,7 +3549,7 @@ class ScheduledExecutionController  extends ControllerBase{
             }
             for (def entry : optionRequestFiles) {
                 String optname = entry.key
-                MultipartFile file = entry.value
+                def file = entry.value
                 try {
                     String ref = fileUploadService.receiveFile(
                             file.inputStream,
@@ -3540,7 +3557,9 @@ class ScheduledExecutionController  extends ControllerBase{
                             authContext.username,
                             file.originalFilename,
                             optname,
+                            fileMap[optname].configMap,
                             scheduledExecution.extid,
+                            scheduledExecution.project,
                             new Date()
                     )
                     uploadedFileRefs[optname] = ref
@@ -3580,7 +3599,9 @@ class ScheduledExecutionController  extends ControllerBase{
                         authContext.username,
                         params.fileName,
                         params.optionName,
+                        fileMap[params.optionName].configMap,
                         scheduledExecution.extid,
+                        scheduledExecution.project,
                         new Date()
                 )
                 uploadedFileRefs[params.optionName] = ref

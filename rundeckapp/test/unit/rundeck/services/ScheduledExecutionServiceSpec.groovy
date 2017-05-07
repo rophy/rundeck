@@ -19,6 +19,7 @@ package rundeck.services
 import com.dtolabs.rundeck.core.authorization.UserAndRoles
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
 import com.dtolabs.rundeck.core.common.Framework
+import com.dtolabs.rundeck.core.common.IRundeckProject
 import com.dtolabs.rundeck.core.execution.workflow.WorkflowExecutionItem
 import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategy
 import com.dtolabs.rundeck.core.execution.workflow.WorkflowStrategyService
@@ -697,6 +698,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -724,6 +726,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -748,6 +751,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -774,6 +778,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -803,6 +808,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -832,6 +838,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                                       ]+data
                       ]
         ]
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._dovalidate(params, mockAuth())
 
@@ -887,6 +894,7 @@ class ScheduledExecutionServiceSpec extends Specification {
         given:
         setupDoUpdate()
         def se = new ScheduledExecution(createJobParams(orig)).save()
+        service.fileUploadService = Mock(FileUploadService)
 
         when:
         def results = service._doupdate([id: se.id.toString()] + inparams, mockAuth())
@@ -977,6 +985,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                         new Option(name: 'test2', defaultValue: 'd', enforced: true, values: ['a', 'b', 'c', 'd'], multivalued: true, delimiter: "testdelim")
                 ]
         ))
+        service.fileUploadService = Mock(FileUploadService)
 
         when:
         def results = service._doupdateJob(se.id,newjob, mockAuth())
@@ -993,6 +1002,7 @@ class ScheduledExecutionServiceSpec extends Specification {
         given:
         setupDoUpdate()
         def se = new ScheduledExecution(createJobParams(orig)).save()
+        service.fileUploadService = Mock(FileUploadService)
 
         when:
         def results = service._doupdate([id: se.id.toString()] + inparams, mockAuth())
@@ -1210,6 +1220,7 @@ class ScheduledExecutionServiceSpec extends Specification {
                 new Option(name: 'test1', defaultValue: 'a', enforced: true, values: ['a', 'b', 'c']),
                 new Option(name: 'test2', enforced: false, valuesUrl: "http://test.com/test2")
         ])).save()
+        service.fileUploadService = Mock(FileUploadService)
 
         def params = baseJobParams()+input
         when:
@@ -1253,6 +1264,7 @@ class ScheduledExecutionServiceSpec extends Specification {
         ])).save()
 
         def params = baseJobParams()+input
+        service.fileUploadService = Mock(FileUploadService)
         when:
         def results = service._doupdate([id:se.id.toString()]+params, mockAuth())
 
@@ -1284,6 +1296,7 @@ class ScheduledExecutionServiceSpec extends Specification {
         def newJob = new ScheduledExecution(createJobParams(
                 options: input
         ))
+        service.fileUploadService = Mock(FileUploadService)
 
         when:
         def results = service._doupdateJob(se.id,newJob, mockAuth())
@@ -1362,6 +1375,85 @@ class ScheduledExecutionServiceSpec extends Specification {
         results.scheduledExecution.retry == null
         results.scheduledExecution.timeout == null
     }
+
+    def "do update job should replace options"() {
+
+        def projectName = 'testProject'
+        given:
+        def se = new ScheduledExecution(
+                jobName: 'monkey1',
+                project: projectName,
+                description: 'blah2',
+                adhocExecution: false,
+                name: 'aResource',
+                type: 'aType',
+                command: 'aCommand'
+        )
+        def opt1 = new Option(name: 'test1', defaultValue: 'val1', enforced: false, valuesUrl: "http://test.com/test")
+        def opt2 = new Option(name: 'test2', defaultValue: 'val2', enforced: true, values: ['a', 'b', 'c'])
+        se.addToOptions(opt1)
+        se.addToOptions(opt2)
+        se.save()
+
+        def projectMock = Mock(IRundeckProject) {
+            getProperties() >> [:]
+        }
+
+        service.frameworkService = Mock(FrameworkService) {
+            isClusterModeEnabled() >> false
+            existsFrameworkProject(projectName) >> true
+            getFrameworkProject(projectName) >> projectMock
+        }
+        service.fileUploadService = Mock(FileUploadService)
+
+
+
+        def params = new ScheduledExecution(jobName: 'monkey1', project: projectName, description: 'blah2',
+                                            workflow: new Workflow(
+                                                    commands: [new CommandExec(
+                                                            adhocRemoteString: 'test command',
+                                                            adhocExecution: true
+                                                    )]
+                                            ),
+                                            options: [
+                                                    new Option(
+                                                            name: 'test3',
+                                                            defaultValue: 'val3',
+                                                            enforced: false,
+                                                            valuesUrl: "http://test.com/test3"
+                                                    ),
+                                            ]
+        )
+        when:
+        def results = service._doupdateJob(se.id, params, null)
+        def succeeded = results.success
+        def scheduledExecution = results.scheduledExecution
+        if (scheduledExecution && scheduledExecution.errors.hasErrors()) {
+            scheduledExecution.errors.allErrors.each {
+                System.err.println(it);
+            }
+        }
+        then:
+        assertTrue succeeded
+        assertNotNull(scheduledExecution)
+        assertTrue(scheduledExecution instanceof ScheduledExecution)
+        final ScheduledExecution execution = scheduledExecution
+        assertNotNull(execution)
+        assertNotNull(execution.errors)
+        assertFalse(execution.errors.hasErrors())
+        assertNotNull execution.options
+        execution.options.size() == 1
+        final Iterator iterator = execution.options.iterator()
+        assert iterator.hasNext()
+        final Option next = iterator.next()
+        assertNotNull(next)
+        assertEquals("wrong option name", "test3", next.name)
+        assertEquals("wrong option name", "val3", next.defaultValue)
+        assertNotNull("wrong option name", next.realValuesUrl)
+        assertEquals("wrong option name", "http://test.com/test3", next.realValuesUrl.toExternalForm())
+        assertFalse("wrong option name", next.enforced)
+    }
+
 
     def "do update  remove retry/timeout"() {
         given:
@@ -1849,7 +1941,8 @@ class ScheduledExecutionServiceSpec extends Specification {
                 project: job?.project ?: 'testproject',
                 user: 'bob',
                 executionType: etype,
-                workflow: new Workflow(commands: [new CommandExec(adhocRemoteString: "test exec")])
+                workflow: new Workflow(commands: [new CommandExec(adhocRemoteString: "test exec")]),
+                retryAttempt: retry
         ).save(flush: true)
         def id = exec.id
         when:
@@ -1860,17 +1953,18 @@ class ScheduledExecutionServiceSpec extends Specification {
         result.groupname == groupname.replaceAll('_ID_', "$id").replaceAll('_JID_', "${job?.id}")
 
         where:
-        isjob | estatus     | jobscheduled | etype            | jobname               | groupname
-        false | null        | null         | 'user'           | 'TEMP:bob:_ID_'       | 'bob:run'
-        true  | null        | false        | 'user'           | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
-        true  | null        | true         | 'user'           | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
-        true  | 'scheduled' | true         | 'user'           | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
-        true  | 'running'   | true         | 'user'           | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
-        true  | null        | true         | 'scheduled'      | '_JID_:ajobname'      | 'AProject:ajobname:some/path'
-        true  | 'scheduled' | true         | 'scheduled'      | '_JID_:ajobname'      | 'AProject:ajobname:some/path'
-        true  | 'running'   | true         | 'scheduled'      | '_JID_:ajobname'      | 'AProject:ajobname:some/path'
-        true  | 'scheduled' | true         | 'user-scheduled' | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
-        true  | 'running'   | true         | 'user-scheduled' | 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        isjob | estatus     | jobscheduled | etype            |retry| jobname               | groupname
+        false | null        | null         | 'user'           |0| 'TEMP:bob:_ID_'       | 'bob:run'
+        true  | null        | false        | 'user'           |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | null        | true         | 'user'           |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | 'scheduled' | true         | 'user'           |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | 'running'   | true         | 'user'           |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | null        | true         | 'scheduled'      |0| '_JID_:ajobname'      | 'AProject:ajobname:some/path'
+        true  | 'scheduled' | true         | 'scheduled'      |0| '_JID_:ajobname'      | 'AProject:ajobname:some/path'
+        true  | 'running'   | true         | 'scheduled'      |0| '_JID_:ajobname'      | 'AProject:ajobname:some/path'
+        true  | 'running'   | true         | 'scheduled'      |1| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | 'scheduled' | true         | 'user-scheduled' |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
+        true  | 'running'   | true         | 'user-scheduled' |0| 'TEMP:bob:_JID_:_ID_' | 'bob:run:_JID_'
 
     }
 

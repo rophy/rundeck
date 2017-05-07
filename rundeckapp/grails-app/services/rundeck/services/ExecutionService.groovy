@@ -100,6 +100,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
     def logFileStorageService
     MessageSource messageSource
     def jobStateService
+    def nodeService
     def grailsApplication
     def configurationService
     def grailsEvents
@@ -255,13 +256,20 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         return lastexecs
     }
     /**
-     * Return the last execution time for any execution in the query's project
+     * Return the last execution id in the project
      * @param query
      * @return
      */
-    def Execution lastExecution(String project){
-        def execs = Execution.findAllByProjectAndDateCompletedIsNotNull(project,[max:1,sort:'dateCompleted',order:'desc'])
-        return execs?execs[0]:null
+    def lastExecutionId(String project) {
+        def execs = Execution.createCriteria().get {
+            eq('project', project)
+            order('dateCompleted', 'desc')
+            maxResults(1)
+            projections {
+                property('id')
+            }
+        }
+        return execs ?: null
     }
 
     /**
@@ -651,7 +659,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
      *
      * @param serverUUID if not null, only match executions assigned to the given serverUUID
      */
-    def cleanupRunningJobsAsync(String serverUUID = null, Date before=new Date()) {
+    def cleanupRunningJobsAsync(String serverUUID = null, String status = null, Date before = new Date()) {
         def executionIds = Execution.withCriteria {
             isNotNull('dateStarted')
             isNull('dateCompleted')
@@ -672,7 +680,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         }
         callAsync {
             def found = executionIds.collect { Execution.get(it) }
-            cleanupRunningJobs(found)
+            cleanupRunningJobs(found, status)
         }
     }
 
@@ -702,25 +710,33 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
      * Set the result status to FAIL for any Executions that are not complete
      * @param serverUUID if not null, only match executions assigned to the given serverUUID
      */
-    def cleanupRunningJobs(String serverUUID=null, Date before=new Date()) {
-        cleanupRunningJobs findRunningExecutions(serverUUID,before)
+    def cleanupRunningJobs(String serverUUID = null, String status = null, Date before = new Date()) {
+        cleanupRunningJobs(findRunningExecutions(serverUUID, before), status)
     }
 
     /**
      * Set the result status to FAIL for any Executions that are not complete
      * @param serverUUID if not null, only match executions assigned to the given serverUUID
      */
-    def cleanupRunningJobs(List<Execution> found) {
+    def cleanupRunningJobs(List<Execution> found, String status = null) {
         found.each { Execution e ->
-            cleanupExecution(e)
+            cleanupExecution(e, status)
         }
     }
 
-    private void cleanupExecution(Execution e) {
-        saveExecutionState(e.scheduledExecution?.id, e.id, [status       : String.valueOf(false),
-                                                            dateCompleted: new Date(), cancelled: true], null, null
+    private void cleanupExecution(Execution e, String status = null) {
+        saveExecutionState(
+                e.scheduledExecution?.id,
+                e.id,
+                [
+                        status       : status ?: String.valueOf(false),
+                        dateCompleted: new Date(),
+                        cancelled    : !status
+                ],
+                null,
+                null
         )
-        log.error("Stale Execution cleaned up: [${e.id}]")
+        log.error("Stale Execution cleaned up: [${e.id}] in ${e.project}")
         metricService.markMeter(this.class.name, 'executionCleanupMeter')
     }
 
@@ -942,29 +958,21 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 if(!extraParams){
                     extraParams=[:]
                 }
-                loadSecureOptionStorageDefaults(scheduledExecution, extraParamsExposed, extraParams, authContext,true)
+                Map<String, String> args = FrameworkService.parseOptsFromString(execution.argString)
+                loadSecureOptionStorageDefaults(scheduledExecution, extraParamsExposed, extraParams, authContext, true, args)
             }
             String inputCharset=frameworkService.getDefaultInputCharsetForProject(execution.project)
 
             StepExecutionContext executioncontext = createContext(execution, null,framework, authContext,
                     execution.user, jobcontext, multiListener, null,extraParams, extraParamsExposed,inputCharset)
 
-            def evt = grailsEvents?.event(
-                    null,
-                    'executionBeforeStart',
+            fileUploadService.executionBeforeStart(
                     new ExecutionPrepareEvent(
-                            execution:execution,
-                            job:scheduledExecution,
+                            execution: execution,
+                            job: scheduledExecution,
                             context: executioncontext
                     )
             )
-            evt?.get()
-            def errs = evt?.getErrors()
-            if (errs) {
-                def err=(errs[0] instanceof EventException)? errs[0].cause : errs[0]
-                throw new ExecutionServiceException(err.message, err)
-            }
-
 
             //ExecutionService handles Job reference steps
             final cis = StepExecutionService.getInstanceForFramework(framework);
@@ -991,6 +999,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             //create service object for the framework and listener
             Thread thread = new WorkflowExecutionServiceThread(framework.getWorkflowExecutionService(),item, executioncontext)
             thread.start()
+            log.debug("started thread")
             return [thread:thread, loghandler:loghandler, noderecorder:recorder, execution: execution, scheduledExecution:scheduledExecution,threshold:threshold]
         }catch(Exception e) {
             log.error("Failed while starting execution: ${execution.id}", e)
@@ -1039,7 +1048,8 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             Map secureOptsExposed,
             Map secureOpts,
             AuthContext authContext,
-            boolean failIfMissingRequired=false
+            boolean failIfMissingRequired=false,
+            Map<String, String> args = null
     )
     {
         def found = scheduledExecution.options?.findAll {
@@ -1050,12 +1060,16 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                     !(secureOpts?.containsKey(it.name))
         }
         if (found) {
-
             //load secure option defaults from key storage
             def keystore = storageService.storageTreeWithContext(authContext)
             found?.each {
                 try {
-                    def password = keystore.readPassword(it.defaultStoragePath)
+                    def defStoragePath = it.defaultStoragePath
+                    //search and replace ${option.
+                    if (args && defStoragePath?.contains('${option.')) {
+                        defStoragePath = DataContextUtils.replaceDataReferences(defStoragePath, DataContextUtils.addContext("option", args, null)).trim()
+                    }
+                    def password = keystore.readPassword(defStoragePath)
                     if (it.secureExposed) {
                         secureOptsExposed[it.name] = new String(password)
                     } else {
@@ -1205,6 +1219,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
             .frameworkProject(execMap.project)
             .storageTree(storageService.storageTreeWithContext(authContext))
             .jobService(jobStateService.jobServiceWithAuthContext(authContext))
+            .nodeService(nodeService)
             .user(userName)
             .nodeSelector(nodeselector)
             .nodes(nodeSet)
@@ -1764,6 +1779,9 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                         message: 'A job cannot be scheduled for a time in the past',
                         options: input.option]
             }
+            if(!allowedOptions['executionType']){
+                allowedOptions['executionType'] = 'user-scheduled'
+            }
 
             def Execution e = createExecution(scheduledExecution, authContext, user, allowedOptions)
             // Update execution
@@ -1880,7 +1898,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
         if (input && input['executionType']) {
             props.executionType = input['executionType']
         } else {
-            props.executionType = 'scheduled'
+            throw new ExecutionServiceException("executionType is required")
         }
 
         //evaluate embedded Job options for validation
@@ -2139,7 +2157,7 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                     return
                 }
 
-                if (opt.optionType == 'file' && optparams[opt.name]) {
+                if (opt.typeFile && optparams[opt.name]) {
                     def validate = fileUploadService.validateFileRefForJobOption(
                             optparams[opt.name],
                             scheduledExecution.extid,
@@ -3220,6 +3238,9 @@ class ExecutionService implements ApplicationContextAware, StepExecutor, NodeSte
                 isNotNull('dateCompleted')
                 eq('cancelled', false)
                 eq('status',  state)
+            }
+            if (query.executionTypeFilter) {
+                eq('executionType', query.executionTypeFilter)
             }
             if (query.abortedbyFilter) {
                 eq('abortedby', query.abortedbyFilter)

@@ -36,8 +36,8 @@ import com.dtolabs.rundeck.core.execution.workflow.FlowControl;
 import com.dtolabs.rundeck.core.execution.workflow.StepExecutionContext;
 import com.dtolabs.rundeck.core.execution.workflow.steps.node.NodeExecutionContext;
 import com.dtolabs.rundeck.core.jobs.JobService;
+import com.dtolabs.rundeck.core.nodes.ProjectNodeService;
 import com.dtolabs.rundeck.core.storage.StorageTree;
-import com.dtolabs.rundeck.plugins.orchestrator.OrchestratorPlugin;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -66,13 +66,13 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
     private ExecutionListener executionListener;
     private Framework framework;
     private AuthContext authContext;
-    private File nodesFile;
     private String nodeRankAttribute;
     private boolean nodeRankOrderAscending = true;
     private int stepNumber = 1;
     private List<Integer> stepContext;
     private StorageTree storageTree;
     private JobService jobService;
+    private ProjectNodeService nodeService;
     private FlowControl flowControl;
 
     private OrchestratorConfig orchestrator;
@@ -145,13 +145,13 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
                 ctx.executionListener = original.getExecutionListener();
                 ctx.framework = original.getFramework();
                 ctx.authContext = original.getAuthContext();
-                ctx.nodesFile = original.getNodesFile();
                 ctx.threadCount = original.getThreadCount();
                 ctx.keepgoing = original.isKeepgoing();
                 ctx.nodeRankAttribute = original.getNodeRankAttribute();
                 ctx.nodeRankOrderAscending = original.isNodeRankOrderAscending();
                 ctx.storageTree = original.getStorageTree();
                 ctx.jobService = original.getJobService();
+                ctx.nodeService = original.getNodeService();
                 ctx.orchestrator = original.getOrchestrator();
                 if(original instanceof NodeExecutionContext){
                     NodeExecutionContext original1 = (NodeExecutionContext) original;
@@ -167,6 +167,11 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
 
         public Builder jobService(JobService jobService) {
             ctx.jobService=jobService;
+            return this;
+        }
+
+        public Builder nodeService(ProjectNodeService nodeService) {
+            ctx.nodeService=nodeService;
             return this;
         }
 
@@ -287,11 +292,6 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
             return this;
         }
 
-        public Builder nodesFile(File nodesFile) {
-            ctx.nodesFile = nodesFile;
-            return this;
-        }
-
         public Builder threadCount(int threadCount) {
             ctx.threadCount = threadCount;
             return this;
@@ -375,10 +375,6 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
         return framework;
     }
 
-    public File getNodesFile() {
-        return nodesFile;
-    }
-
     public int getThreadCount() {
         return threadCount;
     }
@@ -412,6 +408,11 @@ public class ExecutionContextImpl implements ExecutionContext, StepExecutionCont
     @Override
     public JobService getJobService() {
         return jobService;
+    }
+
+    @Override
+    public ProjectNodeService getNodeService(){
+        return nodeService;
     }
 
 

@@ -5,7 +5,12 @@ Rundeck is an open source automation service with a web console,
 command line tools and a WebAPI.
 It lets you easily run automation tasks across a set of nodes.
 
-For more information, mailing lists, IRC channel, visit <http://rundeck.org>
+* Site: <http://rundeck.org>
+
+* Latest documentation: <http://rundeck.org/docs/>
+
+* Get Help: <http://rundeck.org/help.html>
+
 
 See the [Release Notes](RELEASE.md) for the latest version information.
 
@@ -56,7 +61,7 @@ There are several install options: a self-contained jar file, or RPM, or Debian.
 
 To start from the rundeck-launcher.jar, put it in a directory named ~/rundeck, then execute:
 
-    java -XX:MaxPermSize=256m -Xmx1024m -Xms256m -server -jar rundeck-launcher-2.0.0.jar
+    java -Xmx1024m -Xms256m -XX:MaxMetaspaceSize=256m -server -jar rundeck-launcher-2.0.0.jar
 
 If you'd like to install via RPM, you can use Yum:
 

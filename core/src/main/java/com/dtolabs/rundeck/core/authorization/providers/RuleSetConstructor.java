@@ -14,21 +14,16 @@
  * limitations under the License.
  */
 
-package rundeck.controllers
+package com.dtolabs.rundeck.core.authorization.providers;
 
-import grails.test.*
-import rundeck.controllers.ApiController
+import com.dtolabs.rundeck.core.authorization.AclRule;
+import com.dtolabs.rundeck.core.authorization.AclRuleBuilder;
 
-class ApiControllerTests extends ControllerUnitTestCase {
-    protected void setUp() {
-        super.setUp()
-    }
+import java.util.Map;
+import java.util.Set;
 
-    protected void tearDown() {
-        super.tearDown()
-    }
 
-    void testSomething() {
+public interface RuleSetConstructor {
 
-    }
+    Set<AclRule> createRules(AclRuleBuilder prototype);
 }

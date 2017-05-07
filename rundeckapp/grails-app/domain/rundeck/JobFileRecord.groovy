@@ -48,6 +48,7 @@ class JobFileRecord {
     String storageType // storage plugin type "tmpdir", "storage"
     String storageReference // path in storage facility, or temp dir, depends on backend plugin
     String storageMeta // metadata...?
+    String project
     Execution execution
     static constraints = {
         fileName(nullable: true, maxSize: 1024)
@@ -65,12 +66,15 @@ class JobFileRecord {
         storageReference(nullable: false)
         storageMeta(nullable: true)
         execution(nullable: true)
+        project(nullable: false)
     }
 
     static mapping = {
         storageMeta(type: 'text')
         storageReference(type: 'text')
         serverNodeUUID(type: 'text')
+        user column: "rduser"
+        size column: "`SIZE`"
     }
 
     boolean stateIsExpired() {
@@ -182,7 +186,8 @@ class JobFileRecord {
                         'storageType',
                         'storageMeta',
                         'serverNodeUUID',
-                        'recordType'
+                        'recordType',
+                        'project'
                 ]
         )
     }
@@ -205,7 +210,8 @@ class JobFileRecord {
                 storageMeta: map.storageMeta,
                 serverNodeUUID: map.serverNodeUUID,
                 execution: map.execution,
-                recordType: map.recordType
+                recordType: map.recordType,
+                project: map.project
         )
     }
 }

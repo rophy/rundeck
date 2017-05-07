@@ -17,10 +17,12 @@
 package rundeck.services
 
 import com.codahale.metrics.MetricRegistry
+import com.dtolabs.rundeck.core.common.INodeSet
 import com.dtolabs.rundeck.core.common.IProjectNodes
 import com.dtolabs.rundeck.core.common.IProjectNodesFactory
 import com.dtolabs.rundeck.core.common.IRundeckProjectConfig
 import com.dtolabs.rundeck.core.common.ProjectNodeSupport
+import com.dtolabs.rundeck.core.nodes.ProjectNodeService
 import com.dtolabs.rundeck.core.plugins.Closeables
 import com.dtolabs.rundeck.core.plugins.configuration.Property
 import com.dtolabs.rundeck.core.resources.SourceFactory
@@ -44,7 +46,7 @@ import java.util.concurrent.TimeUnit
 /**
  * Provides asynchronous loading and caching of nodesets for projects
  */
-class NodeService implements InitializingBean, RundeckProjectConfigurable,IProjectNodesFactory {
+class NodeService implements InitializingBean, RundeckProjectConfigurable,IProjectNodesFactory, ProjectNodeService {
     public static final String PROJECT_NODECACHE_DELAY = 'project.nodeCache.delay'
     public static final String PROJECT_NODECACHE_ENABLED = 'project.nodeCache.enabled'
     static transactional = false
@@ -283,6 +285,10 @@ class NodeService implements InitializingBean, RundeckProjectConfigurable,IProje
         nodeCache.invalidate(name)
     }
 
+    INodeSet getNodeSet(final String name) {
+        getNodes(name).nodeSet
+    }
+
     IProjectNodes getNodes(final String name) {
         def framework = frameworkService.getRundeckFramework()
         if (!framework.projectManager.existsFrameworkProject(name)) {
@@ -294,4 +300,5 @@ class NodeService implements InitializingBean, RundeckProjectConfigurable,IProje
         }
         result
     }
+
 }

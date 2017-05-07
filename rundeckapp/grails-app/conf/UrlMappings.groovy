@@ -122,7 +122,17 @@ class UrlMappings {
             action = [GET: 'apiProjectFileGet', PUT: 'apiProjectFilePut', DELETE: 'apiProjectFileDelete']
         }
         "/api/$api_version/project/$project/acl/$path**"(controller: 'project',action: 'apiProjectAcls')
-        "/api/$api_version/project/$project/export"(controller: 'project',action: 'apiProjectExport')
+        "/api/$api_version/project/$project/export"(controller: 'project', action: 'apiProjectExport') {
+            async = false
+        }
+        "/api/$api_version/project/$project/export/async"(controller: 'project', action: 'apiProjectExport') {
+            async = true
+        }
+        "/api/$api_version/project/$project/export/status/$token"(controller: 'project', action: 'apiProjectExportAsyncStatus')
+        "/api/$api_version/project/$project/export/download/$token"(
+                controller: 'project',
+                action: 'apiProjectExportAsyncDownload'
+        )
         "/api/$api_version/project/$project/import"(controller: 'project',action: 'apiProjectImport')
         "/api/$api_version/project/$project/resources/refresh"(controller: 'framework', action: 'apiProjectResourcesRefresh')
         "/api/$api_version/project/$project/resources"(controller: 'framework') {
@@ -179,7 +189,13 @@ class UrlMappings {
         "/api/$api_version/system/executions/enable"(controller: 'execution', action: 'apiExecutionModeActive')
         "/api/$api_version/system/executions/disable"(controller: 'execution', action: 'apiExecutionModePassive')
         "/api/$api_version/system/acl/$path**"(controller: 'framework',action: 'apiSystemAcls')
-        "/api/$api_version/tokens/$user?"(controller: 'api', action: 'apiTokenList')
+        "/api/$api_version/tokens/$user?"(controller: 'api'){
+            action=[
+                    GET:"apiTokenList",
+                    POST:"apiTokenCreate"
+            ]
+        }
+        "/api/$api_version/tokens/$user/removeExpired"(controller: 'api', action: 'apiTokenRemoveExpired')
         "/api/$api_version/token/$token"(controller: 'api', action: 'apiTokenManage')
 
         "/api/$api_version/storage/keys/$resourcePath**"(controller: 'storage', action: 'apiKeys')

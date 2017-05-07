@@ -22,6 +22,7 @@ import com.dtolabs.rundeck.server.authorization.AuthConstants
 import com.dtolabs.rundeck.server.plugins.storage.KeyStorageTree
 import grails.test.mixin.Mock
 import grails.test.mixin.TestFor
+import org.aspectj.weaver.ast.Not
 import org.grails.plugins.metricsweb.MetricService
 import org.rundeck.storage.api.PathUtil
 import org.rundeck.storage.api.StorageException
@@ -143,7 +144,8 @@ class ExecutionServiceSpec extends Specification {
                 dateStarted: new Date(),
                 dateCompleted: null,
                 user: 'user',
-                project: 'AProject'
+                project: 'AProject',
+                executionType: 'scheduled'
         ).save()
         service.frameworkService = Stub(FrameworkService) {
             getServerUUID() >> null
@@ -152,10 +154,11 @@ class ExecutionServiceSpec extends Specification {
             getUsername() >> 'user1'
         }
         when:
-        Execution e2 = service.createExecution(job, authContext, null, ['extra.option.test': '12'], true, exec.id)
+        Execution e2 = service.createExecution(job, authContext, null, ['extra.option.test': '12',executionType: 'scheduled'], true, exec.id)
 
         then:
         e2 != null
+        e2.executionType == 'scheduled'
     }
 
     void "create execution as user"() {
@@ -184,7 +187,12 @@ class ExecutionServiceSpec extends Specification {
             getUsername() >> 'user1'
         }
         when:
-        Execution e2 = service.createExecution(job, authContext, 'testuser', ['extra.option.test': '12'])
+        Execution e2 = service.createExecution(
+                job,
+                authContext,
+                'testuser',
+                ['extra.option.test': '12', executionType: 'user']
+        )
 
         then:
         e2 != null
@@ -220,7 +228,8 @@ class ExecutionServiceSpec extends Specification {
         Execution e2 = service.createExecution(
                 job,
                 authContext,
-                null
+                null,
+                [executionType: 'user']
         )
 
         then:
@@ -301,7 +310,7 @@ class ExecutionServiceSpec extends Specification {
             getUsername() >> 'user1'
         }
         when:
-        def result = service.executeJob(job, authContext, 'test2', [:])
+        def result = service.executeJob(job, authContext, 'test2', [executionType: 'user'])
 
         then:
         1 * service.scheduledExecutionService.scheduleTempJob(job, 'test2', authContext, _, [:], [:], 0) >> { args ->
@@ -2000,6 +2009,143 @@ class ExecutionServiceSpec extends Specification {
         false           | false                  | false        | false     | true   | 'aborted'   | 'aborted'
         true            | true                   | true         | true      | true   | 'pending'   | 'running'
         true            | true                   | true         | true      | false  | 'failed'    | 'running'
+
+    }
+
+    def "get NodeService from Context"() {
+        given:
+
+        service.frameworkService = Mock(FrameworkService) {
+            1 * filterNodeSet(null, 'testproj')
+            1 * filterAuthorizedNodes(*_)
+            1 * getProjectGlobals(*_) >> [:]
+            0 * _(*_)
+        }
+        service.storageService = Mock(StorageService) {
+            1 * storageTreeWithContext(_)
+        }
+        service.jobStateService = Mock(JobStateService) {
+            1 * jobServiceWithAuthContext(_)
+        }
+        service.nodeService = Mock(NodeService){}
+
+        Execution se = new Execution(
+                argString: "-test args",
+                user: "testuser",
+                project: "testproj",
+                loglevel: 'WARN',
+                doNodedispatch: false
+        )
+
+        when:
+        def val = service.createContext(se, null, null, null, null, null, null)
+        then:
+        val != null
+        val.getNodeService() != null
+
+    }
+
+    def "loadSecureOptionStorageDefaultsWithOptionParam"() {
+        given:
+        ScheduledExecution job = new ScheduledExecution(
+                jobName: 'blue',
+                project: 'AProject',
+                groupPath: 'some/where',
+                description: 'a job',
+                argString: '-env '+env,
+                workflow: new Workflow(
+                        keepgoing: true,
+                        commands: [
+                                new CommandExec(
+                                        adhocRemoteString: 'test buddy',
+                                        argString: '-delay 12 -monkey cheese -particle'
+                                )
+                        ]
+                ),
+                options: [
+                        new Option(
+                                name: 'env',
+                                required: true
+                        ),
+                        new Option(
+                                name: 'pass',
+                                secureInput: true,
+                                secureExposed: false,
+                                defaultStoragePath: 'keys/${option.env}/pass'
+                        )
+                ]
+        )
+        job.save()
+
+        Map secureOptsExposed = [:]
+        Map secureOpts = [:]
+        def authContext = Mock(AuthContext)
+        Map<String, String> args = FrameworkService.parseOptsFromString(job.argString)
+        service.storageService = Mock(StorageService)
+
+
+        when:
+        service.loadSecureOptionStorageDefaults(job, secureOptsExposed, secureOpts, authContext,false, args)
+
+        then:
+        service.storageService.storageTreeWithContext(authContext) >> Mock(KeyStorageTree) {
+            readPassword('keys/opta/pass') >> {
+                    return 'pass1'.bytes
+            }
+            readPassword('keys/optb/pass') >> {
+                    return 'pass2'.bytes
+            }
+            readPassword('keys/optc/pass') >> {
+                    return 'pass3'.bytes
+            }
+            readPassword(_) >> {
+                return ''.bytes
+            }
+        }
+        expectedpass == secureOpts['pass']
+        where:
+        expectedpass    | env
+        'pass1'         | 'opta'
+        'pass2'         | 'optb'
+        'pass3'         | 'optc'
+        ''              | 'other'
+
+    }
+
+    def "cleanup execution should set custom state"() {
+        given:
+        Execution e = new Execution(
+                argString: "-test args",
+                user: "testuser",
+                project: "testproj",
+                loglevel: 'WARN',
+                doNodedispatch: false,
+                dateStarted: new Date(),
+                workflow: new Workflow(
+                        keepgoing: true,
+                        commands: [new CommandExec([adhocRemoteString: 'test buddy'])]
+                ).save(),
+                ).save(flush: true)
+        service.frameworkService = Mock(FrameworkService)
+        service.reportService = Mock(ReportService) {
+            1 * reportExecutionResult(_) >> [:]
+        }
+        service.notificationService = Mock(NotificationService) {
+            1 * triggerJobNotification(_, _, _)
+        }
+        service.metricService = Mock(MetricService)
+        when:
+        service.cleanupExecution(e, status)
+        then:
+        e.refresh()
+        e.id != null
+        e.status == result
+        e.cancelled == (status == null)
+
+        where:
+        status      | result
+        'testvalue' | 'testvalue'
+        null        | 'false'
 
     }
 }

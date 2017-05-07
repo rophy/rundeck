@@ -32,6 +32,7 @@ import com.dtolabs.rundeck.core.execution.service.FileCopierService
 import com.dtolabs.rundeck.core.execution.service.NodeExecutorService
 import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.plugins.configuration.Validator
+import com.dtolabs.rundeck.plugins.file.FileUploadPlugin
 import com.dtolabs.rundeck.plugins.scm.ScmPluginException
 import com.dtolabs.rundeck.plugins.storage.StorageConverterPlugin
 import com.dtolabs.rundeck.plugins.storage.StoragePlugin
@@ -40,6 +41,7 @@ import com.dtolabs.rundeck.server.plugins.services.StorageConverterPluginProvide
 import com.dtolabs.rundeck.server.plugins.services.StoragePluginProviderService
 import grails.converters.JSON
 import groovy.xml.MarkupBuilder
+import org.grails.plugins.metricsweb.MetricService
 import org.springframework.context.ApplicationContext
 import org.springframework.context.ApplicationContextAware
 import rundeck.Execution
@@ -60,7 +62,6 @@ import rundeck.services.NotificationService
 import rundeck.services.PluginService
 import rundeck.services.ScheduledExecutionService
 import rundeck.services.ScmService
-import rundeck.services.UiPluginService
 import rundeck.services.UserService
 import rundeck.services.framework.RundeckProjectConfigurable
 
@@ -69,6 +70,7 @@ import java.lang.management.ManagementFactory
 
 class MenuController extends ControllerBase implements ApplicationContextAware{
     FrameworkService frameworkService
+    MenuService menuService
     ExecutionService executionService
     UserService userService
     ScheduledExecutionService scheduledExecutionService
@@ -78,6 +80,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
     StoragePluginProviderService storagePluginProviderService
     StorageConverterPluginProviderService storageConverterPluginProviderService
     PluginService pluginService
+    MetricService metricService
 
     def configurationService
     ScmService scmService
@@ -119,13 +122,15 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         }
         
         //find previous executions
-        def model= executionService.queryQueue(query)
+        def model = metricService?.withTimer(MenuController.name, actionName+'.queryQueue') {
+            executionService.queryQueue(query)
+        } ?: executionService.queryQueue(query)
         //        System.err.println("nowrunning: "+model.nowrunning);
         model = executionService.finishQueueQuery(query,params,model)
 
-        //include timestamp of last completed execution for the project
-        Execution e=executionService.lastExecution(query.projFilter)
-        model.lastExecId=e?.id
+        //include id of last completed execution for the project
+        def eid=executionService.lastExecutionId(query.projFilter)
+        model.lastExecId=eid
         
         User u = userService.findOrCreateUser(session.user)
         Map filterpref=[:] 
@@ -207,20 +212,13 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
 
     def index() {
         /**
-        * redirect to configured start page, or default to Run page
+         * redirect to configured start page, or default page
          */
-        def startpage='home'
-        if(grailsApplication.config.rundeck.gui.startpage){
-            startpage=grailsApplication.config.rundeck.gui.startpage
+
+        if (!params.project) {
+            return redirect(controller: 'menu', action: 'home')
         }
-        if(params.page){
-            startpage=params.page
-        }
-        if(!params.project){
-            startpage='home'
-        }else if (params.project && startpage == 'home') {
-            startpage = 'projectHome'
-        }
+        def startpage = params.page?: grailsApplication.config.rundeck.gui.startpage ?: 'jobs'
         switch (startpage){
             case 'home':
                 return redirect(controller: 'menu', action: 'home')
@@ -269,6 +267,10 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         if(results.warning){
             request.warn=results.warning
         }
+
+        def framework = frameworkService.getRundeckFramework()
+        def rdprojectconfig = framework.projectManager.loadProjectConfig(params.project)
+        results.jobExpandLevel = scheduledExecutionService.getJobExpandLevel(rdprojectconfig)
 
         withFormat{
             html {
@@ -756,10 +758,11 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
             }
             //construct existing values from project properties
             def values=Validator.demapProperties(fproject.getProjectProperties(),v.getPropertiesMapping(), true)
-            extraConfig[k]=[
-                    configurable:v,
-                    values:values,
-                    prefix:"extraConfig.${k}."
+            extraConfig[k] = [
+                    name        : k,
+                    configurable: v,
+                    values      : values,
+                    prefix      : "extraConfig.${k}."
             ]
         }
             return [configs:configs,
@@ -1319,6 +1322,10 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
             it.value.description
         }.sort { a, b -> a.name <=> b.name }
 
+        pluginDescs['FileUploadPluginService']=pluginService.listPlugins(FileUploadPlugin).collect {
+            it.value.description
+        }.sort { a, b -> a.name <=> b.name }
+
 
         def uiPluginProfiles = [:]
         def loadedFileNameMap=[:]
@@ -1347,6 +1354,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 (framework.getResourceFormatGeneratorService().name): framework.getResourceFormatGeneratorService().getBundledProviderNames(),
                 (framework.getResourceModelSourceService().name): framework.getResourceModelSourceService().getBundledProviderNames(),
                 (storagePluginProviderService.name): storagePluginProviderService.getBundledProviderNames()+['db'],
+                FileUploadPluginService: ['filesystem-temp'],
         ]
         //list included plugins
         def embeddedList = frameworkService.listEmbeddedPlugins(grailsApplication)
@@ -1375,6 +1383,9 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
                 ],
                 (scmService.scmImportPluginProviderService.name):[
                         description: message(code:"plugin.scmImport.special.description"),
+                ],
+                FileUploadPluginService:[
+                        description: message(code:"plugin.FileUploadPluginService.special.description"),
                 ]
         ]
         def specialScoping=[
@@ -1441,18 +1452,84 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         if (null == session.summaryProjectStats ||
                 session.summaryProjectStats_expire < now ||
                 session.summaryProjectStatsSize != projectNames.size()) {
-            session.summaryProjectStats = loadSummaryProjectStats(projectNames)
+            if (configurationService.getBoolean("menuController.projectStats.queryAlt", false)) {
+                session.summaryProjectStats = metricService?.withTimer(
+                        MenuController.name,
+                        'loadSummaryProjectStatsAlt'
+                ) {
+                    loadSummaryProjectStatsAlt(projectNames)
+                } ?: loadSummaryProjectStatsAlt(projectNames)
+            } else {
+                session.summaryProjectStats = metricService?.withTimer(
+                        MenuController.name,
+                        'loadSummaryProjectStatsOrig'
+                ) {
+                    loadSummaryProjectStatsOrig(projectNames)
+                } ?: loadSummaryProjectStatsOrig(projectNames)
+            }
             session.summaryProjectStatsSize = projectNames.size()
             session.summaryProjectStats_expire = now + (60 * 1000)
         }
         return session.summaryProjectStats
+    }
+
+    private def loadSummaryProjectStatsAlt(final List projectNames) {
+        long start = System.currentTimeMillis()
+        Calendar n = GregorianCalendar.getInstance()
+        n.add(Calendar.DAY_OF_YEAR, -1)
+        Date lastday = n.getTime()
+        def summary = [:]
+        def projects = new TreeSet()
+        projectNames.each { project ->
+            summary[project] = [name: project, execCount: 0, failedCount: 0, userSummary: [], userCount: 0]
+        }
+        long proj2 = System.currentTimeMillis()
+        def executionResults = Execution.createCriteria().list {
+            gt('dateStarted', lastday)
+            inList('project', projectNames)
+            projections {
+                property('project')
+                property('status')
+                property('user')
+            }
+        }
+        proj2 = System.currentTimeMillis() - proj2
+        long proj3 = System.currentTimeMillis()
+        def projexecs = executionResults.groupBy { it[0] }
+        proj3 = System.currentTimeMillis() - proj3
+
+        def execCount = executionResults.size()
+        def totalFailedCount = 0
+        def users = new HashSet<String>()
+        projexecs.each { name, val ->
+            if (summary[name]) {
+                summary[name.toString()].execCount = val.size()
+                projects << name
+                def failedlist = val.findAll { it[1] in ['false', 'failed'] }
+
+                summary[name.toString()].failedCount = failedlist.size()
+                totalFailedCount += failedlist.size()
+                def projusers = new HashSet<String>()
+                projusers.addAll(val.collect { it[2] })
+
+                summary[name.toString()].userSummary.addAll(projusers)
+                summary[name.toString()].userCount = projusers.size()
+                users.addAll(projusers)
+            }
+        }
+
+        log.error(
+                "loadSummaryProjectStats... ${System.currentTimeMillis() - start}, projexeccount ${proj2}, " +
+                        "projuserdistinct ${proj3}"
+        )
+        [summary: summary, recentUsers: users, recentProjects: projects, execCount: execCount, totalFailedCount: totalFailedCount]
     }
     /**
      *
      * @param projectNames
      * @return
      */
-    private def loadSummaryProjectStats(final List projectNames) {
+    private def loadSummaryProjectStatsOrig(final List projectNames) {
         long start=System.currentTimeMillis()
         Calendar n = GregorianCalendar.getInstance()
         n.add(Calendar.DAY_OF_YEAR, -1)
@@ -1465,6 +1542,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         long proj2=System.currentTimeMillis()
         def projects2 = Execution.createCriteria().list {
             gt('dateStarted', today)
+            inList('project', projectNames)
             projections {
                 groupProperty('project')
                 count()
@@ -1485,6 +1563,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         def failedExecs = Execution.createCriteria().list {
             gt('dateStarted', today)
             inList('status', ['false', 'failed'])
+            inList('project', projectNames)
             projections {
                 groupProperty('project')
                 count()
@@ -1502,6 +1581,7 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
         long proj3=System.currentTimeMillis()
         def users2 = Execution.createCriteria().list {
             gt('dateStarted', today)
+            inList('project', projectNames)
             projections {
                 distinct('user')
                 property('project')
@@ -1585,6 +1665,8 @@ class MenuController extends ControllerBase implements ApplicationContextAware{
 
             summary[project.name].description= project.hasProperty("project.description")?project.getProperty("project.description"):''
             if(!params.refresh) {
+                summary[project.name].readmeDisplay = menuService.getReadmeDisplay(project)
+                summary[project.name].motdDisplay = menuService.getMotdDisplay(project)
                 summary[project.name].readme = frameworkService.getFrameworkProjectReadmeContents(project)
                 //authorization
                 summary[project.name].auth = [
