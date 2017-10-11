@@ -22,7 +22,8 @@
     <meta name="layout" content="base"/>
     <meta name="tabpage" content="jobs"/>
     <title><g:message code="gui.menu.Workflows"/> - <g:enc>${params.project ?: request.project}</g:enc></title>
-    <g:javascript library="yellowfade"/>
+
+    <asset:javascript src="util/yellowfade.js"/>
     <g:javascript library="pagehistory"/>
     <g:javascript library="prototype/effects"/>
     <asset:javascript src="menu/jobs.js"/>
@@ -30,7 +31,8 @@
         <asset:javascript src="menu/joboptionsTest.js"/>
         <asset:javascript src="menu/job-remote-optionsTest.js"/>
     </g:if>
-    <g:embedJSON id="pageParams" data="${[project:params.project?:request.project]}"/>
+    <g:embedJSON data="${projectNames ?: []}" id="projectNamesData"/>
+    <g:embedJSON id="pageParams" data="${[project: params.project?:request.project,]}"/>
     <g:jsMessages code="Node,Node.plural,job.starting.execution,job.scheduling.execution,option.value.required,options.remote.dependency.missing.required,,option.default.button.title,option.default.button.text,option.select.choose.text"/>
     <!--[if (gt IE 8)|!(IE)]><!--> <g:javascript library="ace/ace"/><!--<![endif]-->
     <script type="text/javascript">
@@ -57,9 +59,9 @@
 
             $('busy').hide();
         }
-        function requestError(item,trans){
+        function requestError(item,message){
             unloadExec();
-            showError("Failed request: "+item+" . Result: "+trans.getStatusText());
+            showError("Failed request: "+item+". Result: "+message);
         }
         function loadExec(id,eparams) {
             $("error").hide();
@@ -67,11 +69,12 @@
             if(!params){
                 params={id:id};
             }
-            jQuery('#execDivContent').load(_genUrl(appLinks.scheduledExecutionExecuteFragment, params),function(response,status,xhr){
+            jQuery('#execDivContent').load(_genUrl(appLinks.scheduledExecutionExecuteFragment, params),
+                function(response,status,xhr){
                 if (status == "success") {
                     loadedFormSuccess(!!id,id);
                 } else {
-                    requestError("executeFragment for [" + id + "]",xhr);
+                    requestError("executeFragment for [" + id + "]",xhr.statusText);
                 }
             });
         }
@@ -102,8 +105,8 @@
                         showError(result.message ? result.message : result.error ? result.error : "Failed request");
                     }
                 },
-                error: function (x) {
-                    requestError("runJobInline", x);
+                error: function (data, jqxhr, err) {
+                    requestError("runJobInline", err);
                 }
             });
         }
@@ -279,14 +282,13 @@
         function showJobDetails(elem){
             //get url
             var href=elem.href || elem.getAttribute('data-href');
-            var match=href.match(/\/job\/.+?\/(.+)$/);
-            if(!match){
-                return;
-            }
             lastHref=href;
             doshow=true;
             //match is id
-            var matchId=match[1];
+            var matchId = jQuery(elem).data('jobId');
+            if(!matchId){
+                return;
+            }
             var viewdom=$('jobIdDetailHolder');
             var bcontent=$('jobIdDetailContent');
             if(viewdom){
@@ -395,6 +397,12 @@
             PageActionHandlers.registerHandler('enable_job_schedule_single',function(el){
                 bulkeditor.activateActionForJob(bulkeditor.ENABLE_SCHEDULE,el.data('jobId'));
             });
+
+            PageActionHandlers.registerHandler('copy_other_project',function(el){
+                jQuery('#jobid').val(el.data('jobId'));
+                jQuery('#selectProject').modal();
+            });
+
 
             Event.observe(document.body,'click',function(evt){
                 //click outside of popup bubble hides it
@@ -543,7 +551,8 @@
             ko.applyBindings(bulkeditor,document.getElementById('group_controls'));
         });
     </script>
-    <g:javascript library="yellowfade"/>
+
+    <asset:javascript src="util/yellowfade.js"/>
     <asset:javascript src="menu/joboptions.js"/>
     <style type="text/css">
     .error{
@@ -602,6 +611,9 @@
 </div>
 </div>
 </div>
+
+<g:render template="/menu/copyModal"
+          model="[projectNames: projectNames]"/>
 
 <div class="row row-space" id="activity_section">
     <div class="col-sm-12 ">

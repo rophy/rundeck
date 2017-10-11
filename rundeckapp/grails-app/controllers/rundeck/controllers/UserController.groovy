@@ -209,10 +209,10 @@ class UserController extends ControllerBase{
         }
     }
 
-    def cancel={
+    def cancel(){
         return redirect(action:'profile')
     }
-    def edit={
+    def edit(){
         def model=profile()
         return model
     }
@@ -265,7 +265,7 @@ class UserController extends ControllerBase{
             )
             result = [result: true, /*apitoken: token.token, */ tokenid: token.uuid]
         } catch (Exception e) {
-            result = [result: false, error: e.message]
+            result = [result: false, error: e.getCause().message]
         }
         return renderTokenGenerateResult(result, params.login)
     }

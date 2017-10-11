@@ -25,8 +25,8 @@ if (System.properties['maven.central.url']) {
 println "Maven Central: ${mavenCentralUrl}"
 
 
-grails.project.target.level = 1.7
-grails.project.source.level = 1.7
+grails.project.target.level = 1.8
+grails.project.source.level = 1.8
 
 grails.project.dependency.resolver = "maven"
 
@@ -96,7 +96,7 @@ grails.project.dependency.resolution = {
         compile (':asset-pipeline:2.7.2')
         compile ':cache:1.1.8'
         compile ":platform-core:1.0.0"
-        runtime (':hibernate4:4.3.6.1')
+        runtime (':hibernate4:4.3.10')
         runtime ':mail:1.0.7', ':quartz:1.0.2', ':executor:0.3'
 
         runtime ':profiler:0.5'
@@ -108,22 +108,27 @@ grails.project.dependency.resolution = {
     dependencies {
 
         build 'org.yaml:snakeyaml:1.9'
-        compile 'org.yaml:snakeyaml:1.9', 'org.apache.ant:ant:1.8.3', 'org.apache.ant:ant-jsch:1.8.3',
-                'com.jcraft:jsch:0.1.53', 'log4j:log4j:1.2.17', 'commons-collections:commons-collections:3.2.2',
+        compile 'org.yaml:snakeyaml:1.9',
+                'org.apache.ant:ant:1.8.3',
+                'org.apache.ant:ant-jsch:1.8.3',
+                'com.jcraft:jsch:0.1.54',
+                'log4j:log4j:1.2.17',
+                'commons-collections:commons-collections:3.2.2',
                 'commons-codec:commons-codec:1.5',
-                'com.fasterxml.jackson.core:jackson-databind:2.5.3',
-                'com.fasterxml.jackson.core:jackson-annotations:2.5.3',
+                'com.fasterxml.jackson.core:jackson-databind:2.8.8.1',
+                'com.fasterxml.jackson.core:jackson-annotations:2.8.8',
                 'com.codahale.metrics:metrics-core:3.0.1',
                 'com.google.guava:guava:15.0',
                 'org.owasp.encoder:encoder:1.2',
                 'org.quartz-scheduler:quartz:2.2.1',
-                'org.markdownj:markdownj-core:0.4',
+                'com.atlassian.commonmark:commonmark:0.9.0',
+                'com.atlassian.commonmark:commonmark-ext-gfm-tables:0.9.0',
                 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20160614.1'
 
         compile("org.rundeck:rundeck-core:${rundeckVersion}")
         compile("org.rundeck:rundeck-storage-filesys:${rundeckVersion}")
 
-        runtime 'postgresql:postgresql:9.1-901.jdbc4'
+        runtime 'org.postgresql:postgresql:42.0.0'
         runtime 'mysql:mysql-connector-java:5.1.35'
 
         //BEGIN fix hibernate4 bug with dateCreated auto timestamp, see: https://jira.grails.org/browse/GPHIB-30

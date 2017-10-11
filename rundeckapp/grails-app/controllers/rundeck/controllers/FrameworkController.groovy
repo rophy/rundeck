@@ -26,11 +26,9 @@ import com.dtolabs.rundeck.core.execution.service.ExecutionServiceException
 import com.dtolabs.rundeck.core.execution.service.MissingProviderException
 import com.dtolabs.rundeck.core.plugins.configuration.Describable
 import com.dtolabs.rundeck.core.plugins.configuration.Property
-import com.dtolabs.rundeck.core.plugins.configuration.PropertyScope
 import com.dtolabs.rundeck.core.plugins.configuration.Validator
 import com.dtolabs.rundeck.core.resources.FileResourceModelSource
 import com.dtolabs.rundeck.core.resources.FileResourceModelSourceFactory
-import com.dtolabs.rundeck.core.resources.format.json.ResourceJsonFormatGenerator
 import com.dtolabs.rundeck.core.utils.NodeSet
 import com.dtolabs.rundeck.core.utils.OptsUtil
 import com.dtolabs.shared.resources.ResourceXMLGenerator
@@ -44,9 +42,9 @@ import rundeck.ScheduledExecution
 import rundeck.services.ApiService
 import rundeck.services.AuthorizationService
 import rundeck.services.PasswordFieldsService
+import rundeck.services.ScheduledExecutionService
 import rundeck.services.framework.RundeckProjectConfigurable
 
-import javax.servlet.http.HttpServletRequest
 import javax.servlet.http.HttpServletResponse
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
@@ -80,6 +78,7 @@ import rundeck.filters.ApiRequestFilters
 class FrameworkController extends ControllerBase implements ApplicationContextAware {
     FrameworkService frameworkService
     ExecutionService executionService
+    ScheduledExecutionService scheduledExecutionService
     UserService userService
 
     PasswordFieldsService resourcesPasswordFieldsService
@@ -91,6 +90,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
     def configStorageService
     def AuthorizationService authorizationService
     def ApplicationContext applicationContext
+    def MenuService menuService
     // the delete, save and update actions only
     // accept POST requests
     def static allowedMethods = [
@@ -318,7 +318,6 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
         def allnodes = [:]
         def totalexecs = [:]
         def total=0
-        def truncateMax=params.untruncate?-1: params.maxShown?params.int('maxShown'):100
         def allcount=null
         NodeSet nset = ExecutionService.filtersAsNodeSet(query)
         def projects=[]
@@ -379,6 +378,10 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 remaining=true;
                 page=page*-1;
             }
+        }
+        def truncateMax=params.untruncate?-1: params.maxShown?params.int('maxShown'):100
+        if(truncateMax && max){
+            truncateMax=Math.max(truncateMax,max)
         }
 
         def tagsummary=frameworkService.summarizeTags(nodes)
@@ -857,7 +860,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 errors << "Resource Model Source provider was not found: ${type}"
             } else {
                 projProps[sourceConfigPrefix + '.' + count + '.type'] = type
-                def mapprops = frameworkService.parseResourceModelConfigInput(provider.description, prefixKey + '.' + ndx + '.' + 'config.', params)
+                def mapprops = frameworkService.parsePluginConfigInput(provider.description, prefixKey + '.' + ndx + '.' + 'config.', params)
                 def props = new Properties()
                 props.putAll(mapprops)
                 props.keySet().each { k ->
@@ -1053,8 +1056,8 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
         }
 
         //cancel modification
-        if (params.cancel == 'Cancel') {
-            return redirect(controller: 'menu', action: 'admin', params: [project: project])
+        if (params.cancel) {
+            return redirect(controller: 'menu', action: 'index', params: [project: project])
         }
 
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
@@ -1089,6 +1092,21 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             def Properties projProps = new Properties()
             projProps.putAll(inputProps)
             def inputMap = new HashMap(inputProps)
+
+            def isExecutionDisabledNow = !scheduledExecutionService.isProjectExecutionEnabled(project)
+            def isScheduleDisabledNow = !scheduledExecutionService.isProjectScheduledEnabled(project)
+
+
+            def newExecutionDisabledStatus =
+                    (projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_EXECUTION]
+                            && projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_EXECUTION] == 'true')
+            def newScheduleDisabledStatus =
+                    (projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_SCHEDULE]
+                            && projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_SCHEDULE] == 'true')
+
+            def reschedule = ((isExecutionDisabledNow != newExecutionDisabledStatus)
+                    || (isScheduleDisabledNow != newScheduleDisabledStatus))
+            def active = (!newExecutionDisabledStatus && !newScheduleDisabledStatus)
 
             final nodeExecType = frameworkService.getDefaultNodeExecutorService(projProps)
             final nodeConfig = frameworkService.getNodeExecConfigurationForType(nodeExecType, projProps)
@@ -1180,6 +1198,13 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 if (!result.success) {
                     errors << result.error
                 }
+                if(reschedule){
+                    if(active){
+                        scheduledExecutionService.rescheduleJobs(frameworkService.isClusterModeEnabled()?frameworkService.getServerUUID():null, project)
+                    }else{
+                        scheduledExecutionService.unscheduleJobsForProject(project, frameworkService.isClusterModeEnabled()?frameworkService.getServerUUID():null, project)
+                    }
+                }
             }
 
             if (!errors) {
@@ -1187,7 +1212,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 resourcesPasswordFieldsService.reset()
                 fcopyPasswordFieldsService.reset()
                 execPasswordFieldsService.reset()
-                return redirect(controller: 'menu', action: 'admin', params: [project: project])
+                return redirect(controller: 'framework', action: 'editProjectConfig', params: [project: project])
             }
         }
         if(errors){
@@ -1221,8 +1246,8 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
         }
 
         //cancel modification
-        if (params.cancel == 'Cancel') {
-            return redirect(controller: 'menu', action: 'admin', params: [project: project])
+        if (params.cancel) {
+            return redirect(controller: 'menu', action: 'index', params: [project: project])
         }
 
         AuthContext authContext = frameworkService.getAuthContextForSubject(session.subject)
@@ -1252,6 +1277,9 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             }else{
                 projProps['project.description']=''
             }
+
+
+
             def Set<String> removePrefixes=[]
             removePrefixes<< FrameworkProject.PROJECT_RESOURCES_URL_PROPERTY
             if (params.defaultNodeExec) {
@@ -1311,7 +1339,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 count++
 
                 projProps[resourceType] = type
-                def mapprops = frameworkService.parseResourceModelConfigInput(description, prefixKey + '.' + ndx + '.' + 'config.', params)
+                def mapprops = frameworkService.parsePluginConfigInput(description, prefixKey + '.' + ndx + '.' + 'config.', params)
 
                 Properties props = new Properties()
                 props.putAll(mapprops)
@@ -1381,9 +1409,28 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 extraConfig[k]=beanData
             }
 
+            def isExecutionDisabledNow = !scheduledExecutionService.isProjectExecutionEnabled(project)
+            def isScheduleDisabledNow = !scheduledExecutionService.isProjectScheduledEnabled(project)
+
+            def newExecutionDisabledStatus =
+                    projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_EXECUTION] == 'true'
+            def newScheduleDisabledStatus =
+                    projProps[ScheduledExecutionService.CONF_PROJECT_DISABLE_SCHEDULE] == 'true'
+
+            def reschedule = ((isExecutionDisabledNow != newExecutionDisabledStatus)
+                    || (isScheduleDisabledNow != newScheduleDisabledStatus))
+            def active = (!newExecutionDisabledStatus && !newScheduleDisabledStatus)
+
             if (!errors) {
 
                 def result = frameworkService.updateFrameworkProjectConfig(project, projProps, removePrefixes)
+                if(reschedule){
+                    if(active){
+                        scheduledExecutionService.rescheduleJobs(frameworkService.isClusterModeEnabled()?frameworkService.getServerUUID():null, project)
+                    }else{
+                        scheduledExecutionService.unscheduleJobsForProject(project,frameworkService.isClusterModeEnabled()?frameworkService.getServerUUID():null)
+                    }
+                }
                 if (!result.success) {
                     errors << result.error
                 }
@@ -1395,7 +1442,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 resourcesPasswordFieldsService.reset()
                 fcopyPasswordFieldsService.reset()
                 execPasswordFieldsService.reset()
-                return redirect(controller: 'menu', action: 'admin', params: [project: project])
+                return redirect(controller: 'menu', action: 'index', params: [project: project])
             }
         }
         if(errors){
@@ -1445,11 +1492,13 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
         def project = params.project
 
         if (unauthorizedResponse(
-            frameworkService.authorizeApplicationResourceAll(
-                frameworkService.getAuthContextForSubject(session.subject),
-                frameworkService.authResourceForProject(project),
-                [AuthConstants.ACTION_ADMIN]),
-            AuthConstants.ACTION_ADMIN, 'Project', project)) {
+                frameworkService.authorizeApplicationResourceAll(
+                        frameworkService.getAuthContextForSubject(session.subject),
+                        frameworkService.authResourceForProject(project),
+                        [AuthConstants.ACTION_CONFIGURE, AuthConstants.ACTION_ADMIN]
+                ),
+                AuthConstants.ACTION_CONFIGURE, 'Project', project
+        )) {
             return
         }
 
@@ -1490,7 +1539,7 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             def values=Validator.demapProperties(fwkProject.getProjectProperties(),v.getPropertiesMapping(), true)
             extraConfig[k]=[
                     name        : k,
-                    configurable:v,
+                    configurable: v,
                     values      : values,
                     prefix      : "extraConfig.${k}."
             ]
@@ -1525,8 +1574,10 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
                 frameworkService.authorizeApplicationResourceAll(
                         frameworkService.getAuthContextForSubject(session.subject),
                         frameworkService.authResourceForProject(project),
-                        [AuthConstants.ACTION_ADMIN]),
-                AuthConstants.ACTION_ADMIN, 'Project', project)) {
+                        [AuthConstants.ACTION_CONFIGURE, AuthConstants.ACTION_ADMIN]
+                ),
+                AuthConstants.ACTION_CONFIGURE, 'Project', project
+        )) {
             return
         }
 
@@ -1537,9 +1588,18 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             fwkProject.loadFileResource(params.filename,baos)
             fileText=baos.toString('UTF-8')
         }
+
+        def displayConfig
+        if (params.filename == 'readme.md') {
+            displayConfig = menuService.getReadmeDisplay(fwkProject)
+        } else if (params.filename == 'motd.md') {
+            displayConfig = menuService.getMotdDisplay(fwkProject)
+        }
+
         [
-                filename:params.filename,
-                fileText:fileText
+                displayConfig: displayConfig,
+                filename     : params.filename,
+                fileText     : fileText
         ]
     }
     def saveProjectFile (){
@@ -1575,8 +1635,8 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
         }
 
         //cancel modification
-        if (params.cancel == 'Cancel') {
-            return redirect(controller: 'menu', action: 'admin', params: [project: project])
+        if (params.cancel) {
+            return redirect(controller: 'menu', action: 'index', params: [project: project])
         }
 
         final def fwkProject = frameworkService.getFrameworkProject(project)
@@ -1590,7 +1650,11 @@ class FrameworkController extends ControllerBase implements ApplicationContextAw
             flash.message='Cleared project file '+params.filename
         }
 
-        return redirect(controller: 'menu', action: 'admin', params: [project: project])
+        return redirect(
+                controller: 'framework',
+                action: 'editProjectFile',
+                params: [project: project, filename: params.filename]
+        )
     }
     def editProjectConfig (){
         if(!params.project){

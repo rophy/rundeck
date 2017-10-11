@@ -70,7 +70,7 @@ to have access via [sudo].
 Rundeck is a Java-Servlet based server and therefore requires the Java
 runtime.
 
-The install process requires that the latest version of Java 1.7
+The install process requires that the latest version of Java 8
 be installed. Both the [Open JDK](http://openjdk.java.net/) and [Sun/Oracle](http://java.com/) JVMs can be used.
 You must have the JAVA_HOME environment variable defined
 in your environment before running the launcher.  The RPM will use the java found on your path. See [Setting JAVA_HOME](startup-and-shutdown.html#setting-java_home) if you want to run a different version of java.
@@ -82,9 +82,9 @@ $ java -version
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-java version "1.7.0_55"
-OpenJDK Runtime Environment (rhel-2.4.7.1.el6_5-x86_64 u55-b13)
-OpenJDK 64-Bit Server VM (build 24.51-b03, mixed mode)
+java version "1.8.0_131"
+Java(TM) SE Runtime Environment (build 1.8.0_131-b11)
+Java HotSpot(TM) 64-Bit Server VM (build 25.131-b11, mixed mode)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 
 #### Network access
@@ -148,7 +148,7 @@ documentation as well.
 
 Note: The latest install documentation is available at <http://rundeck.org/downloads.html>.
 
-Note, the java JDK must be installed. Install any JDK that is 1.7+.
+Note, the Java 8 JDK must be installed.
 
 If you want to install Rundeck on Linux via a binary installer, you
 can generally do so through the RPM tool that comes with your distribution. 
@@ -327,7 +327,7 @@ To install the launcher on Windows as a service, follow these instructions:
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ 
 
 * This will create the usual structure under `%RDECK_BASE%`, but will just install it, not execute it.
-* If `--installonly` dosen't create all folders, just run `java -jar rundeck-launcher-x.x.x.jar` and stop the instance after the startup process finished.
+* If `--installonly` doesn't create all folders, just run `java -jar rundeck-launcher-x.x.x.jar` and stop the instance after the startup process finished.
 * Customize `%RDECK_BASE%\etc\profile.bat` according to your installation (for example `-Xmx4096m -Xms1024m`)
 * Customize `%RDECK_BASE%\server\config\rundeck-config.properties` accordingly to the docs
 * Create a bat file (e.g. `start_rundeck.bat`) and place it under `%RDECK_BASE%`
@@ -354,7 +354,7 @@ To install the launcher on Windows as a service, follow these instructions:
 
 ###IIS as a reverse proxy
 
-This steps allow to "integrate" rundeck with IIS. This could be neccesary for example for these user cases:
+This steps allow to "integrate" rundeck with IIS. This could be necessary for example for these user cases:
 
 * to get rundeck through the port 80 in a subdirectory of IIS (e.g. `http://yoursite/rundeck`)
 * when It is already set up a SSL certificate for a site and you want to reuse it without fiddling with the java certstore
@@ -396,7 +396,7 @@ matches the pattern (using regular expression): `rundeck.*` (or a regex matching
 * rewrite url: `http://127.0.0.1:81/{R:0}`
 * check `append query string`
 
-Then, any request coming to http://yoursite/rundeck will be proxying to your rundeck instance running on port 81 on the same server, and you'll be sure that every request will come in only proxyied by IIS, since rundeck is only listening to 127.0.0.1.
+Then, any request coming to http://yoursite/rundeck will be proxying to your rundeck instance running on port 81 on the same server, and you'll be sure that every request will come in only proxied by IIS, since rundeck is only listening to 127.0.0.1.
 
 #### Troubleshooting
 

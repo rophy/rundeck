@@ -31,19 +31,25 @@ import com.dtolabs.rundeck.core.logging.ReverseSeekingStreamingLogReader
 import com.dtolabs.rundeck.core.logging.StreamingLogReader
 import com.dtolabs.rundeck.app.support.ExecutionQuery
 import com.dtolabs.rundeck.core.utils.OptsUtil
+import com.dtolabs.rundeck.plugins.logging.LogFilterPlugin
+import com.dtolabs.rundeck.plugins.logs.ContentConverterPlugin
 import com.dtolabs.rundeck.server.authorization.AuthConstants
+import com.dtolabs.rundeck.server.plugins.DescribedPlugin
 import grails.converters.JSON
 import org.codehaus.groovy.grails.web.mapping.LinkGenerator
+import org.codehaus.groovy.grails.web.servlet.mvc.GrailsParameterMap
 import rundeck.CommandExec
 import rundeck.Execution
 import rundeck.ScheduledExecution
 import rundeck.filters.ApiRequestFilters
 import rundeck.services.ApiService
+import rundeck.services.ConfigurationService
 import rundeck.services.ExecutionService
 import rundeck.services.FileUploadService
 import rundeck.services.FrameworkService
 import rundeck.services.LoggingService
 import rundeck.services.OrchestratorPluginService
+import rundeck.services.PluginService
 import rundeck.services.ScheduledExecutionService
 import rundeck.services.WorkflowService
 import rundeck.services.logging.ExecutionLogReader
@@ -67,6 +73,8 @@ class ExecutionController extends ControllerBase{
     ApiService apiService
     WorkflowService workflowService
     FileUploadService fileUploadService
+    PluginService pluginService
+    ConfigurationService configurationService
 
     static allowedMethods = [
             delete:['POST','DELETE'],
@@ -234,6 +242,20 @@ class ExecutionController extends ControllerBase{
         def workflowTree = scheduledExecutionService.getWorkflowDescriptionTree(e.project, e.workflow, 0)
         def inputFiles = fileUploadService.findRecords(e, FileUploadService.RECORD_TYPE_OPTION_INPUT)
         def inputFilesMap = inputFiles.collectEntries { [it.uuid, it] }
+
+        def projectNames = frameworkService.projectNames(authContext)
+        def authProjectsToCreate = []
+        projectNames.each{
+            if(it != params.project && frameworkService.authorizeProjectResource(
+                    authContext,
+                    AuthConstants.RESOURCE_TYPE_JOB,
+                    AuthConstants.ACTION_CREATE,
+                    it
+            )){
+                authProjectsToCreate.add(it)
+            }
+        }
+
         return [
                 scheduledExecution    : e.scheduledExecution ?: null,
                 execution             : e,
@@ -247,7 +269,11 @@ class ExecutionController extends ControllerBase{
                 enext                 : enext,
                 eprev                 : eprev,
                 stepPluginDescriptions: pluginDescs,
-                inputFilesMap         : inputFilesMap
+                inputFilesMap         : inputFilesMap,
+                logFilterPlugins      : pluginService.listPlugins(LogFilterPlugin),
+                inputFilesMap         : inputFilesMap,
+                projectNames          : authProjectsToCreate,
+                clusterModeEnabled    : frameworkService.isClusterModeEnabled()
         ]
     }
     def delete = {
@@ -451,11 +477,11 @@ class ExecutionController extends ControllerBase{
             }
             if(requestActive == executionService.executionsAreActive){
                 flash.message=g.message(code:'action.executionMode.notchanged.'+(requestActive?'active':'passive')+'.text')
-                return redirect(controller: 'menu',action:'systemConfig',params:[project:params.project])
+                return redirect(controller: 'menu',action:'executionMode')
             }
             executionService.setExecutionsAreActive(requestActive)
             flash.message=g.message(code:'action.executionMode.changed.'+(requestActive?'active':'passive')+'.text')
-            return redirect(controller: 'menu',action:'systemConfig',params:[project:params.project])
+            return redirect(controller: 'menu',action:'executionMode')
         }.invalidToken{
 
             request.error=g.message(code:'request.error.invalidtoken.message')
@@ -486,6 +512,7 @@ class ExecutionController extends ControllerBase{
         boolean valid=false
         withForm{
             valid=true
+            g.refreshFormTokensHeader()
         }.invalidToken{
 
         }
@@ -507,12 +534,11 @@ class ExecutionController extends ControllerBase{
         def Execution e = Execution.get(params.id)
         if(!e){
             log.error("Execution not found for id: "+params.id)
-            flash.error = "Execution not found for id: "+params.id
             return withFormat {
                 json{
                     render(contentType:"text/json"){
                         delegate.cancelled=false
-                        delegate.status=(statusStr?statusStr:(didcancel?'killed':'failed'))
+                        delegate.error = "Execution not found for id: " + params.id
                     }
                 }
                 xml {
@@ -522,7 +548,14 @@ class ExecutionController extends ControllerBase{
         }
         AuthContext authContext = frameworkService.getAuthContextForSubjectAndProject(session.subject,e.project)
         def ScheduledExecution se = e.scheduledExecution
-        ExecutionService.AbortResult abortresult=executionService.abortExecution(se, e, session.user, authContext)
+        ExecutionService.AbortResult abortresult = executionService.abortExecution(
+                se,
+                e,
+                session.user,
+                authContext,
+                null,
+                params.forceIncomplete == 'true'
+        )
 
 
         def didcancel=abortresult.abortstate in [ExecutionService.ABORT_ABORTED, ExecutionService.ABORT_PENDING]
@@ -533,6 +566,7 @@ class ExecutionController extends ControllerBase{
                 render(contentType:"text/json"){
                     delegate.cancelled=didcancel
                     delegate.status=(abortresult.status?:(didcancel?'killed':'failed'))
+                    delegate.abortstate = abortresult.abortstate
                     if(reasonstr){
                         delegate.'reason'=reasonstr
                     }
@@ -540,9 +574,12 @@ class ExecutionController extends ControllerBase{
             }
             xml {
                 render(contentType:"text/xml",encoding:"UTF-8"){
-                    result(error:false,success:didcancel){
+                    result(error: false, success: didcancel, abortstate: abortresult.abortstate) {
                         success{
                             message("Job status: ${abortresult.status?:(didcancel?'killed': 'failed')}")
+                        }
+                        if (reasonstr) {
+                            reason(reasonstr)
                         }
                     }
                 }
@@ -657,13 +694,27 @@ class ExecutionController extends ControllerBase{
 <div class="ansicolor ansicolor-${(params.ansicolor in ['false','off'])?'off':'on'}" >"""
 
         def csslevel=!(params.loglevels in ['off','false'])
+        def renderContent = shouldConvertContent(params)
         iterator.each{ LogEvent msgbuf ->
             if(msgbuf.eventType != LogUtil.EVENT_TYPE_LOG){
                 return
             }
             def message = msgbuf.message
             def msghtml=message.encodeAsHTML()
-            if (message.contains('\033[')) {
+            boolean converted = false
+            if (renderContent && msgbuf.metadata['content-data-type']) {
+                //look up content-type
+                Map meta = [:]
+                msgbuf.metadata.keySet().findAll { it.startsWith('content-meta:') }.each {
+                    meta[it.substring('content-meta:'.length())] = msgbuf.metadata[it]
+                }
+                String result = convertContentDataType(message, msgbuf.metadata['content-data-type'], meta, 'text/html')
+                if (result != null) {
+                    msghtml = result.encodeAsSanitizedHTML()
+                    converted = true
+                }
+            }
+            if (!converted && message.contains('\033[')) {
                 try {
                     msghtml = message.decodeAnsiColor()
                 } catch (Exception exc) {
@@ -687,6 +738,17 @@ class ExecutionController extends ControllerBase{
 </body>
 </html>
 '''
+    }
+
+    /**
+     * @param params
+     * @return true if configuration/params enable log data content conversion plugins
+     */
+    private boolean shouldConvertContent(Map params) {
+        configurationService.getBoolean(
+                'gui.execution.logs.renderConvertedContent',
+                true
+        ) && !(params.convertContent in ['false', false, 'off'])
     }
     /**
      * API: /api/execution/{id}/output, version 5
@@ -1110,6 +1172,28 @@ class ExecutionController extends ControllerBase{
                 }
             }
 //        }
+        if (shouldConvertContent(params)) {
+            //interpret any log content
+
+            entry.each {logentry->
+                if (logentry.mesg && logentry['content-data-type']) {
+                    //look up content-type
+                    Map meta = [:]
+                    logentry.keySet().findAll{it.startsWith('content-meta:')}.each{
+                        meta[it.substring('content-meta:'.length())]=logentry[it]
+                    }
+                    String result = convertContentDataType(
+                            logentry.mesg,
+                            logentry['content-data-type'],
+                            meta,
+                            'text/html'
+                    )
+                    if (result != null) {
+                        logentry.loghtml = result.encodeAsSanitizedHTML()
+                    }
+                }
+            }
+        }
         if("true" == servletContext.getAttribute("output.markdown.enabled") && !params.disableMarkdown){
             entry.each{
                 if(it.mesg){
@@ -1192,6 +1276,91 @@ class ExecutionController extends ControllerBase{
                 response.outputStream.close()
             }
         }
+    }
+
+    //TODO: move to a service
+    private String convertContentDataType(final Object input, final String inputDataType, Map<String,String> meta, final String outputType) {
+//        log.error("find converter : ${input.class}(${inputDataType}) => ?($outputType)")
+        def plugins = listViewPlugins()
+        List<DescribedPlugin<ContentConverterPlugin>> foundPlugins = findOutputViewPlugins(
+                plugins,
+                inputDataType,
+                input.class
+        )
+        def chain = []
+
+        def resultPlugin = foundPlugins.find {
+            it.instance.getOutputDataTypeForContentDataType(input.class, inputDataType) == outputType
+        }
+
+        //attempt to resolve the data type
+        if (!resultPlugin) {
+//            log.error("not found converter : ${input.class}(${inputDataType}) => $outputType, searching ${foundPlugins.size()} plugins...")
+            foundPlugins.find {
+                def otype = it.instance.getOutputDataTypeForContentDataType(input.class, inputDataType)
+                def oclass = it.instance.getOutputClassForDataType(input.class, inputDataType)
+                def results = findOutputViewPlugins(plugins, otype, oclass)
+
+//                log.error("search subconverter :<${it.name}>  ${oclass}($otype) => ${results}")
+                def plugin2 = results.find {
+                    it.instance.getOutputDataTypeForContentDataType(oclass, otype) == outputType
+                }
+                if (plugin2) {
+//                    log.error(
+//                            " found converter :<${it.name}> ${input.class}(${inputDataType}) => ${oclass}($otype)"
+//                    )
+//                    log.error(" found converter :<${plugin2.name}> ${oclass}(${otype}) => ?($outputType)")
+                    chain = [it, plugin2]
+                }else{
+
+//                    log.error("not found subconverter :<${it.name}> ${input.class}(${inputDataType}) => ${oclass}($otype) => ${outputType}")
+                }
+                //end loop when found
+                plugin2 != null
+            }
+        } else {
+            chain = [resultPlugin]
+        }
+//        log.error("chain: "+chain)
+        if (chain) {
+            def ovalue = input
+            def otype = inputDataType
+            try {
+                chain.each { plugin ->
+                    def nexttype = plugin.instance.getOutputDataTypeForContentDataType(ovalue.getClass(), otype)
+                    ovalue = plugin.instance.convert(ovalue, otype, meta)
+                    otype = nexttype
+                }
+            } catch (Throwable t) {
+                log.warn(
+                        "Failed converting data type ${input.getClass()}($inputDataType)  with plugins: ${chain*.name}",
+                        t
+                )
+            }
+            return ovalue
+        }
+
+        return null
+    }
+
+    private List<DescribedPlugin<ContentConverterPlugin>> findOutputViewPlugins(
+            Map<String, DescribedPlugin<ContentConverterPlugin>> plugins,
+            String inputDataType,
+            Class clazz
+    )
+    {
+        def foundPlugins = plugins.entrySet().findAll {
+            it.value.instance.isSupportsDataType(clazz, inputDataType)
+        }.collect { it.value }
+        foundPlugins
+    }
+    Map<String, DescribedPlugin<ContentConverterPlugin>> viewPluginsMap = [:]
+
+    private Map<String, DescribedPlugin<ContentConverterPlugin>> listViewPlugins() {
+        if (!viewPluginsMap) {
+            viewPluginsMap = pluginService.listPlugins(ContentConverterPlugin)
+        }
+        viewPluginsMap
     }
 
     /**
@@ -1416,7 +1585,14 @@ class ExecutionController extends ControllerBase{
             //authorized within service call
             killas= params.asUser
         }
-        ExecutionService.AbortResult abortresult = executionService.abortExecution(se, e, user, authContext, killas)
+        ExecutionService.AbortResult abortresult = executionService.abortExecution(
+                se,
+                e,
+                user,
+                authContext,
+                killas,
+                params.forceIncomplete == 'true'
+        )
 
         def reportstate=[status: abortresult.abortstate]
         if(abortresult.reason){

@@ -17,12 +17,18 @@
 import com.dtolabs.rundeck.app.support.QueueQuery
 import com.dtolabs.rundeck.core.authorization.AuthContext
 import com.dtolabs.rundeck.core.authorization.UserAndRolesAuthContext
+import com.dtolabs.rundeck.core.common.NodeEntryImpl
+import com.dtolabs.rundeck.core.common.NodeSetImpl
+import com.dtolabs.rundeck.core.common.SelectorUtils
+import com.dtolabs.rundeck.core.dispatcher.ContextView
+import com.dtolabs.rundeck.core.dispatcher.DataContextUtils
+import com.dtolabs.rundeck.core.data.SharedDataContextUtils
 import com.dtolabs.rundeck.core.execution.ExecutionContextImpl
+import com.dtolabs.rundeck.core.execution.workflow.StepExecutionContext
 import com.dtolabs.rundeck.server.authorization.AuthConstants
 import com.dtolabs.rundeck.server.plugins.storage.KeyStorageTree
 import grails.test.mixin.Mock
 import grails.test.mixin.TestFor
-import org.aspectj.weaver.ast.Not
 import org.grails.plugins.metricsweb.MetricService
 import org.rundeck.storage.api.PathUtil
 import org.rundeck.storage.api.StorageException
@@ -301,7 +307,9 @@ class ExecutionServiceSpec extends Specification {
             getServerUUID() >> null
             authorizeProjectJobAll(*_) >> true
         }
-        service.scheduledExecutionService = Mock(ScheduledExecutionService)
+        service.scheduledExecutionService = Mock(ScheduledExecutionService){
+            isProjectExecutionEnabled(_) >> true
+        }
         service.configurationService = Stub(ConfigurationService) {
             isExecutionModeActive() >> true
         }
@@ -369,7 +377,7 @@ class ExecutionServiceSpec extends Specification {
 
         then:
         1 * service.scheduledExecutionService.scheduleAdHocJob(*_) >> { args ->
-            final Date startDate    = args[7]
+            final Date startDate    = args[6]
             // The start time may differ slightly (milliseconds)
             assert startDate.getTime() - expected.getTime() <= 500 ||
                 startDate.getTime() - expected.getTime() >= -500
@@ -509,7 +517,7 @@ class ExecutionServiceSpec extends Specification {
                 null,
                 context,
                 ['-test1', '${option.test1}', '-test2', '${option.test2}'] as String[],
-                null, null, null, null, null, false
+                null, null, null, null, null, null, false, true
         )
 
         then:
@@ -565,7 +573,7 @@ class ExecutionServiceSpec extends Specification {
                 null,
                 context,
                 [] as String[],
-                null, null, null, null, null, false
+                null, null, null, null, null, null, false, true
         )
 
         then:
@@ -628,7 +636,7 @@ class ExecutionServiceSpec extends Specification {
                 exec,
                 context,
                 args as String[],
-                null, null, null, null, null, false
+                null, null, null, null, null, null, false, true
         )
 
         then:
@@ -706,7 +714,7 @@ class ExecutionServiceSpec extends Specification {
                 null,
                 context,
                 [] as String[],//null values for the input options
-                null, null, null, null, null, false
+                null, null, null, null, null, null, false, true
         )
 
         then:
@@ -779,7 +787,7 @@ class ExecutionServiceSpec extends Specification {
                 null,
                 context,
                 ['-test1', '${option.zilch}', '-test2', '${option.test2}'] as String[],
-                null, null, null, null, null, false
+                null, null, null, null, null, null, false, true
         )
 
         then:
@@ -788,6 +796,154 @@ class ExecutionServiceSpec extends Specification {
         newCtxt.dataContext['option'] == ['test2': 'zimbo']
         newCtxt.privateDataContext['option'] == ['test1': 'phoenix']
     }
+
+    @Unroll
+    def "createJobReferenceContext shared variable expansion in args with node? #nodename"() {
+        given:
+        def sharedContext = SharedDataContextUtils.sharedContext()
+        sharedContext.merge(ContextView.global(), DataContextUtils.context("rarity", [globular: "globalvalue"]))
+        sharedContext.merge(ContextView.node('anode'), DataContextUtils.context("rarity", [globular: "anodevalue"]))
+        def context = ExecutionContextImpl
+                .builder()
+                .threadCount(1)
+                .keepgoing(false)
+
+                .dataContext(
+                ['option': ['monkey': 'wakeful'], 'secureOption': ['test2': 'zimbo'], 'job': ['execid': '123']]
+        )
+                .privateDataContext(['option': ['zilch': 'phoenix'],])
+                .mergeSharedContext(sharedContext)
+                .user('aUser')
+                .build()
+        ScheduledExecution se = new ScheduledExecution(
+                jobName: 'blue',
+                project: 'AProject',
+                groupPath: 'some/where',
+                description: 'a job',
+                workflow: new Workflow(
+                        keepgoing: true,
+                        commands: [new CommandExec(
+                                [adhocRemoteString: 'test buddy', argString: '-delay 12 -monkey cheese -particle']
+                        )]
+                ),
+                )
+        null != se
+        def opt1 = new Option(name: 'test1', enforced: false, required: false, secureInput: true)
+        def opt2 = new Option(name: 'test2', enforced: false, required: false, secureInput: true, secureExposed: true)
+        def opt3 = new Option(name: 'test3', enforced: false, required: false, secureInput: false)
+        assertTrue(opt1.validate())
+        assertTrue(opt2.validate())
+        assertTrue(opt3.validate())
+        se.addToOptions(opt1)
+        se.addToOptions(opt2)
+        se.addToOptions(opt3)
+        null != se.save()
+
+        service.frameworkService = Mock(FrameworkService) {
+            1 * filterNodeSet(null, 'AProject')
+            1 * filterAuthorizedNodes(*_)
+            1 * getProjectGlobals(*_)
+            0 * _(*_)
+        }
+
+        service.storageService = Mock(StorageService)
+        service.jobStateService = Mock(JobStateService)
+
+        def contextNode = nodename ? new NodeEntryImpl(nodename) : null
+
+        when:
+
+        def newCtxt = service.createJobReferenceContext(
+                se,
+                null,
+                context,
+                ['-test3', '${rarity.globular}', '-test1', '${option.zilch}', '-test2', '${option.test2}'] as String[],
+                null, null, null, null, null,
+                contextNode,
+                false, true
+        )
+
+        then:
+        sharedContext.resolve(ContextView.global(), 'rarity', 'globular') == 'globalvalue'
+        newCtxt.dataContext['secureOption'] == ['test2': 'zimbo']
+        newCtxt.dataContext['option'] == ['test2': 'zimbo', 'test3': expect]
+        newCtxt.privateDataContext['option'] == ['test1': 'phoenix']
+
+        where:
+        nodename | expect
+        null     | 'globalvalue'
+        'anode'  | 'anodevalue'
+        'bnode'  | 'globalvalue'
+    }
+
+    @Unroll
+    def "overrideJobReferenceNodeFilter uses shared variable expansion in #nodeFilter"() {
+        given:
+        def sharedContext = SharedDataContextUtils.sharedContext()
+        sharedContext.merge(ContextView.global(), DataContextUtils.context("shared", [nodea: "b"]))
+        sharedContext.merge(ContextView.global(), DataContextUtils.context("global", [nodea: "a"]))
+        sharedContext.merge(ContextView.node('anode'), DataContextUtils.context("shared", [nodea: "c"]))
+        sharedContext.merge(ContextView.node('anode'), DataContextUtils.context("nodecontext", [nodea: "a"]))
+
+        def makeNodeSet = { list ->
+            def nodeset = new NodeSetImpl()
+            list.each {
+                nodeset.putNode(new NodeEntryImpl(it))
+            }
+            nodeset
+        }
+        def allNodes = makeNodeSet(['a', 'b', 'c', 'x', 'y', 'z'])
+        def context = ExecutionContextImpl.builder()
+                                          .nodes(allNodes)
+                                          .nodeSelector(SelectorUtils.nodeList(['a', 'b', 'c', 'x', 'y', 'z']))
+                                          .threadCount(1)
+                                          .keepgoing(false)
+                                          .dataContext(DataContextUtils.context('data', [nodea: 'z']))
+                                          .mergeSharedContext(sharedContext)
+                                          .build()
+        service.frameworkService = Mock(FrameworkService) {
+            1 * filterNodeSet(_, _) >> { args ->
+                com.dtolabs.rundeck.core.common.NodeFilter.filterNodes(args[0], allNodes)
+            }
+            1 * filterAuthorizedNodes(_, _, _, _) >> { args ->
+                args[2]
+            }
+            0 * _(*_)
+        }
+
+        service.storageService = Mock(StorageService)
+        service.jobStateService = Mock(JobStateService)
+
+
+        when:
+
+        def newCtxt = service.overrideJobReferenceNodeFilter(
+                null,
+                context,
+                ExecutionContextImpl.builder().build(),
+                nodeFilter,
+                2,
+                true,
+                null,
+                null,
+                false
+        )
+
+        then:
+        newCtxt.nodes.nodeNames == expect as Set
+
+        where:
+        nodeFilter                       | expect
+        'x y'                            | ['x', 'y']
+        '${bad.wrong} x y'               | ['x', 'y']
+        '${data.nodea} x y'              | ['z', 'x', 'y']
+        '${global.nodea} x y'            | ['a', 'x', 'y']
+        '${shared.nodea} x y'            | ['b', 'x', 'y']
+        '${shared.nodea@anode} x y'      | ['c', 'x', 'y']
+        '${nodecontext.nodea} x y'       | ['x', 'y']
+        '${nodecontext.nodea@anode} x y' | ['a', 'x', 'y']
+    }
+
 
     def "Create execution context with global vars"() {
         given:
@@ -850,7 +1006,7 @@ class ExecutionServiceSpec extends Specification {
         )
 
         when:
-        def val = service.createContext(se, null, null, null, null, null, null, null, null, null, charset)
+        def val = service.createContext(se, null, null, null, null, null, null, null, null, null, null, charset)
         then:
         val != null
         val.charsetEncoding == charset
@@ -1746,6 +1902,7 @@ class ExecutionServiceSpec extends Specification {
         }
         def authContext = Mock(UserAndRolesAuthContext) {
             getUsername() >> 'user1'
+            getRoles() >> (['c', 'd'] as Set)
         }
         service.scheduledExecutionService = Mock(ScheduledExecutionService)
         def job = new ScheduledExecution(
@@ -1763,13 +1920,17 @@ class ExecutionServiceSpec extends Specification {
 
         then:
         1 * service.scheduledExecutionService.scheduleAdHocJob(*_) >> { args ->
-            final Date startDate    = args[7]
+            final Date startDate    = args[6]
             // The start time may differ slightly (milliseconds)
             assert startDate.getTime() - scheduleDate.getTime() <= 500 ||
                 startDate.getTime() - scheduleDate.getTime() >= -500
             return scheduleDate
         }
         result.nextRun.getTime() == scheduleDate.getTime()
+        result.execution != null
+        result.execution.user == 'user1'
+        result.execution.userRoles == ['c', 'd']
+
 
         where:
         executionsAreActive | scheduleEnabled | executionEnabled | hasSchedule | expectScheduled
@@ -1888,10 +2049,10 @@ class ExecutionServiceSpec extends Specification {
 
         then:
         1 * service.scheduledExecutionService.scheduleAdHocJob(*_) >> { args ->
-            final Date startDate    = args[7]
+            final Date startDate    = args[6]
             // The start time may differ slightly (milliseconds)
-            assert startDate.getTime() - scheduleDate.getTime() <= 500 ||
-                startDate.getTime() - scheduleDate.getTime() >= -500
+            assert startDate.getTime() - scheduleDate.getTime() <= 1000 &&
+                startDate.getTime() - scheduleDate.getTime() >= -1000
             return scheduleDate
         }
         result.nextRun.getTime() == scheduleDate.getTime()
@@ -1902,6 +2063,10 @@ class ExecutionServiceSpec extends Specification {
         "2200-01-01T12:43:10.000Z"      | true                | true            | true             | true        | true
         "2200-01-01T12:43:10+00:00"     | true                | true            | true             | true        | true
         "2200-01-01T12:43:10Z"          | true                | true            | true             | true        | true
+        "2200-01-01T18:13:10+05:30"     | true                | true            | true             | true        | true
+        "2200-01-01T18:13:10.000+05:30" | true                | true            | true             | true        | true
+        "2200-01-01T09:13:10-03:30"     | true                | true            | true             | true        | true
+        "2200-01-01T09:13:10.000-03:30" | true                | true            | true             | true        | true
     }
 
     @Unroll
@@ -1942,6 +2107,8 @@ class ExecutionServiceSpec extends Specification {
         "01/01/2001 10:11:12.000000 +0000" | true                | true            | true             | true        | true
         "0000-00-00 00:00:00.000+0000"     | true                | true            | true             | true        | true
         "2080-01-01T01:00:01.000"          | true                | true            | true             | true        | true
+        "2200-01-01 18:13:10.000 +05:30"   | true                | true            | true             | true        | true
+        "2080-01-01 01:00:01.000 -03:30"   | true                | true            | true             | true        | true
     }
 
     @Unroll
@@ -1976,17 +2143,30 @@ class ExecutionServiceSpec extends Specification {
                 ).save(flush: true)
         def user = 'userB'
         def auth = Mock(AuthContext)
+        service.configurationService = Mock(ConfigurationService) {
+            getString('executionService.startup.cleanupStatus', _) >> 'incompletestatus'
+        }
 
         when:
-        def result = service.abortExecution(job, e, user, auth)
+        def result = service.abortExecution(job, e, user, auth, asuser, forced)
 
         then:
+        Execution.withSession {session->
+            session.flush()
+            e.refresh()
+        }
         e.id != null
         result.abortstate == eAbortstate
         result.jobstate == eJobstate
+        e.status == (isadhocschedule&&wasScheduledPreviously?'scheduled':estatus)
+        e.cancelled == ecancelled
+        e.abortedby==(cmatch?(asuser?:'userB'):null)
 
         1 * service.scheduledExecutionService.getJobIdent(job, e) >> [jobname: 'test', groupname: 'testgroup']
         1 * service.frameworkService.authorizeProjectExecutionAll(auth, e, [AuthConstants.ACTION_KILL]) >> true
+        if(asuser) {
+            1 * service.frameworkService.authorizeProjectExecutionAll(auth, e, [AuthConstants.ACTION_KILLAS]) >> true
+        }
         1 * service.frameworkService.isClusterModeEnabled() >> iscluster
         if(cmatch) {
             1 * service.scheduledExecutionService.findExecutingQuartzJob(job, e) >>
@@ -1998,17 +2178,31 @@ class ExecutionServiceSpec extends Specification {
 
 
         where:
-        isadhocschedule | wasScheduledPreviously | didinterrupt | iscluster | cmatch | eAbortstate | eJobstate
-        true            | true                   | true         | false     | true   | 'pending'   | 'running'
-        false           | true                   | true         | false     | true   | 'pending'   | 'running'
-        true            | false                  | true         | false     | true   | 'aborted'   | 'aborted'
-        false           | false                  | true         | false     | true   | 'aborted'   | 'aborted'
-        true            | true                   | false        | false     | true   | 'failed'    | 'running'
-        false           | true                   | false        | false     | true   | 'failed'    | 'running'
-        true            | false                  | false        | false     | true   | 'aborted'   | 'aborted'
-        false           | false                  | false        | false     | true   | 'aborted'   | 'aborted'
-        true            | true                   | true         | true      | true   | 'pending'   | 'running'
-        true            | true                   | true         | true      | false  | 'failed'    | 'running'
+        isadhocschedule | wasScheduledPreviously | didinterrupt | iscluster | cmatch | forced | eAbortstate | eJobstate | estatus | ecancelled | asuser
+        true            | true                   | true         | false     | true   | false  | 'pending'   | 'running' | 'false' | false | null
+        true            | true                   | true         | false     | true   | false  | 'pending'   | 'running' | 'false' | false | 'userC'
+        false           | true                   | true         | false     | true   | false  | 'pending'   | 'running'| null | false| null
+        false           | true                   | true         | false     | true   | false  | 'pending'   | 'running'| null | false| 'userC'
+        true            | false                  | true         | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| null
+        true            | false                  | true         | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| 'userC'
+        false           | false                  | true         | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| null
+        false           | false                  | true         | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| 'userC'
+        true            | true                   | false        | false     | true   | false  | 'failed'    | 'running'| 'false' | false| null
+        true            | true                   | false        | false     | true   | false  | 'failed'    | 'running'| 'false' | false| 'userC'
+        false           | true                   | false        | false     | true   | false  | 'failed'    | 'running'| null | false| null
+        false           | true                   | false        | false     | true   | false  | 'failed'    | 'running'| null | false| 'userC'
+        true            | false                  | false        | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| null
+        true            | false                  | false        | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| 'userC'
+        false           | false                  | false        | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| null
+        false           | false                  | false        | false     | true   | false  | 'aborted'   | 'aborted'| 'false' | true| 'userC'
+        true            | true                   | true         | true      | true   | false  | 'pending'   | 'running'| 'false' | false| null
+        true            | true                   | true         | true      | true   | false  | 'pending'   | 'running'| 'false' | false| 'userC'
+        true            | true                   | true         | true      | false  | false  | 'failed'    | 'running'| 'false' | false| null
+        true            | true                   | true         | true      | false  | false  | 'failed'    | 'running'| 'false' | false| 'userC'
+        false           | true                   | false        | false     | true  | true   | 'aborted'   | 'aborted' | 'incompletestatus' | false| null
+        false           | true                   | false        | false     | true  | true   | 'aborted'   | 'aborted' | 'incompletestatus' | false| 'userC'
+        false           | false                   | false        | false     | true  | true   | 'aborted'   | 'aborted' | 'incompletestatus' | false| null
+        false           | false                   | false        | false     | true  | true   | 'aborted'   | 'aborted' | 'incompletestatus' | false| 'userC'
 
     }
 
@@ -2146,6 +2340,48 @@ class ExecutionServiceSpec extends Specification {
         status      | result
         'testvalue' | 'testvalue'
         null        | 'false'
+
+    }
+
+    def "get NodeService from origContext only if exists for referenced from another projects jobs"() {
+        given:
+
+        def orgProject = 'prgProj'
+        def jobProj = 'testproj'
+        service.frameworkService = Mock(FrameworkService) {
+            1 * filterNodeSet(null, orgProject)
+            0 * filterNodeSet(null, jobProj)
+            1 * filterAuthorizedNodes(*_)
+            1 * getProjectGlobals(*_) >> [:]
+            0 * _(*_)
+        }
+        service.storageService = Mock(StorageService) {
+            1 * storageTreeWithContext(_)
+        }
+        service.jobStateService = Mock(JobStateService) {
+            1 * jobServiceWithAuthContext(_)
+        }
+        service.nodeService = Mock(NodeService){}
+
+        Execution se = new Execution(
+                argString: "-test args",
+                user: "testuser",
+                project: jobProj,
+                loglevel: 'WARN',
+                doNodedispatch: false
+        )
+
+        def origContext = Mock(StepExecutionContext){
+            getFrameworkProject() >> orgProject
+            getStepContext() >> []
+
+        }
+
+        when:
+        def val = service.createContext(se, origContext, null, null, null, null, null)
+        then:
+        val != null
+        val.getNodeService() != null
 
     }
 }

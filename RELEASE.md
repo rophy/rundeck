@@ -1,16 +1,9 @@
-Release 2.8.2
+Release 2.9.3
 ===========
 
-Date: 2017-04-19
+Date: 2017-08-25
 
-Name: <span style="color: Olive"><span class="glyphicon glyphicon-flag"></span> "cafe cubano olive flag"</span>
-
-## Upgrading from 2.8.0
-
-**Important Note**: please see the [Upgrading Guide](http://rundeck.org/docs/upgrading/index.html) if you are using Mysql or H2 database,
-and are upgrading from Rundeck 2.8.0.
-
-A DB schema change requires a manual fix before upgrading.
+Name: <span style="color: Goldenrod"><span class="glyphicon glyphicon-book"></span> "caffe latte goldenrod book"</span>
 
 ## Upgrading from Earlier versions
 
@@ -18,25 +11,38 @@ A DB schema change requires a manual fix before upgrading.
 
 ## Notes
 
-Bug fixes and a few slight enhancements.
+Bugfix release.
+
+Previous changes in 2.9.0: [Relese 2.9.0](https://github.com/rundeck/rundeck/blob/v2.9.0/RELEASE.md)
+
+For more detail see [2.9.0 Changes](https://github.com/rundeck/rundeck/issues/2577)
+
+Stay tuned! We are also adding many new features to [Rundeck Pro](http://rundeck.com).
 
 ## Contributors
 
 * Greg Schueler (gschueler)
+* Luis Toledo (ltamaster)
 * jtobard
+* 黑牛 (chenlingmin)
 
-## Reporters
+## Bug Reporters
 
-* jtobard
-* al-heisner
-* jquick
 * ahonor
+* chenlingmin
+* emiliohh
+* giovanimarin
+* jtobard
+* ltamaster
 
 ## Issues
 
-[Milestone 2.8.2](https://github.com/rundeck/rundeck/milestone/54)
+[Milestone 2.9.3](https://github.com/rundeck/rundeck/milestone/61)
 
-* [Using option value in key storage path](https://github.com/rundeck/rundeck/pull/2443)
-* [Jobs hang when retry is enabled and step fails on at least one node](https://github.com/rundeck/rundeck/issues/2442)
-* [v2.8.1 Cannot create table job_file_record due to reserved word (oracle)](https://github.com/rundeck/rundeck/issues/2441)
-* [Expand global properties in plugin.yaml context](https://github.com/rundeck/rundeck/issues/2399)
+* [When upload job's definition them project always is filled with the current project](https://github.com/rundeck/rundeck/issues/2715)
+* [Expose delete executions for plugins](https://github.com/rundeck/rundeck/pull/2709)
+* [Add "footer" message on login page.](https://github.com/rundeck/rundeck/pull/2692)
+* [jobref to other project uses other project's nodes](https://github.com/rundeck/rundeck/issues/2685)
+* [sync chinese message properties](https://github.com/rundeck/rundeck/pull/2678)
+* ["Next scheduled execution" message is inconsistent on Cluster Mode](https://github.com/rundeck/rundeck/issues/2677)
+* [Importing job with node intersection issue ](https://github.com/rundeck/rundeck/issues/2625)
